@@ -69,10 +69,18 @@ jobs:
       - name: Repair Linux wheel (add manylinux tag)
         if: runner.os == 'Linux'
         run: |
-          pip install auditwheel
-          auditwheel repair dist/*.whl -w dist/repaired/
-          rm dist/*.whl
-          mv dist/repaired/*.whl dist/
+          pip install wheel
+          # Detect the minimum glibc version required by the bundled .so
+          # and use it as the manylinux platform tag.
+          SO=src/bethkit/libbethkit_ffi.so
+          GLIBC=$(strings "$SO" \
+            | grep -oP '(?<=GLIBC_)[0-9]+\.[0-9]+' \
+            | sort -V | tail -1)
+          GLIBC=${GLIBC:-2.17}
+          MAJOR=${GLIBC%%.*}; MINOR=${GLIBC##*.}
+          PLAT="manylinux_${MAJOR}_${MINOR}_x86_64"
+          echo "Detected glibc ${GLIBC} -> platform tag ${PLAT}"
+          python -m wheel tags --platform-tag "${PLAT}" --remove dist/bethkit-*.whl
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
