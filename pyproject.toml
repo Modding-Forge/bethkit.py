@@ -7,7 +7,7 @@ path = "scripts/hatch_build.py"
 
 [project]
 name = "bethkit"
-version = "1.0.2"
+version = "1.0.3"
 description = "Python bindings for bethkit — a Bethesda plugin and archive toolkit"
 readme = "README.md"
 license = { text = "Apache-2.0" }

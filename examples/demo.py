@@ -82,7 +82,7 @@ def demo_schema(plugin: Plugin) -> None:
     registry = SchemaRegistry.sse()
     for group in plugin:
         for record in _iter_records(group):
-            if record.signature == b"NPC_":
+            if record.signature == b"NPC_" and registry.has(b"NPC_"):
                 with RecordView.new(record, b"NPC_") as view:
                     print(
                         f"Schema view for NPC_ 0x{record.form_id:08X}"
@@ -111,7 +111,7 @@ def main() -> None:
     with Plugin.open(plugin_path, Game.SKYRIM_SE) as plugin:
         print_plugin_info(plugin)
 
-        print(f"First records (up to 20):")
+        print("First records (up to 20):")
         print_records(plugin)
         print()
 

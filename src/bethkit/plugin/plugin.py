@@ -178,6 +178,13 @@ class Record:
 
     Records are owned by their parent :class:`Group` or
     :class:`PluginCache` and must not outlive it.
+
+    .. warning::
+        Do **not** call :meth:`Plugin.close` (or exit its ``with`` block)
+        while any :class:`Record` or :class:`Group` derived from that
+        plugin is still alive.  Child objects hold a raw native pointer
+        into the plugin's memory; accessing it after the plugin is freed
+        causes undefined behaviour.
     """
 
     _ptr: int
@@ -358,6 +365,13 @@ class Group:
     Groups are the primary organisational unit in Bethesda plugin files.
     They may contain :class:`Record` children or nested :class:`Group`
     children.
+
+    .. warning::
+        Do **not** close or exit the parent :class:`Plugin` while any
+        :class:`Group` derived from it (or any child iterator over it)
+        is still active.  Native memory is freed immediately on close;
+        any subsequent access through a surviving child object causes
+        undefined behaviour.
     """
 
     _ptr: int
@@ -463,6 +477,13 @@ class Group:
 
         Yields:
             Record | Group: Each child in order.
+
+        .. warning::
+            The parent :class:`Plugin` must remain open for the entire
+            duration of iteration.  Closing the plugin (e.g. via an
+            exception leaving its ``with`` block) while this iterator
+            is suspended causes use-after-free on the next
+            ``next()`` call.
         """
 
         lib = _ffi.load_lib()
@@ -581,6 +602,13 @@ class Plugin:
         Release the native plugin handle.
 
         Safe to call multiple times; subsequent calls are no-ops.
+
+        .. warning::
+            All :class:`Record` and :class:`Group` objects derived from
+            this plugin (and any active iterators over them) become
+            invalid after this call.  Accessing any of them afterwards
+            causes use-after-free.  Prefer the ``with`` statement to
+            ensure child objects do not outlive the plugin.
         """
 
         if self.__ptr:

@@ -5,10 +5,19 @@ from __future__ import annotations
 
 import ctypes
 from pathlib import Path
+from typing import Optional
 
 from .. import _ffi
 from .._error import BethkitClosedError, BethkitOwnershipError
 from ..enums import Game
+
+_HEDR_VERSION: dict[Game, float] = {
+    Game.SKYRIM_SE: 1.7,
+    Game.FALLOUT4: 0.95,
+    Game.SKYRIM: 0.94,
+    Game.FALLOUT3: 0.94,
+    Game.FALLOUT_NV: 0.94,
+}
 
 
 def _sig_buf(sig: bytes | str) -> ctypes.Array[ctypes.c_uint8]:
@@ -375,19 +384,24 @@ class PluginWriter:
 
     __ptr: int
 
-    def __init__(self, game: Game, form_version: int = 44) -> None:
+    def __init__(self, game: Game, hedr_version: Optional[float] = None) -> None:
         """
         Args:
             game (Game): Target game; determines the correct format.
-            form_version (int): Default form version written to record
-                headers. Defaults to ``44`` (Skyrim SE).
+            hedr_version (Optional[float]): HEDR version float written to
+                the TES4 plugin header.  When ``None`` (the default), the
+                canonical version for *game* is used (e.g. ``1.7`` for
+                Skyrim SE, ``0.95`` for Fallout 4, ``0.94`` for Skyrim LE /
+                Fallout 3 / Fallout NV).
 
         Raises:
             BethkitNativeError: If the native writer cannot be created.
         """
 
+        if hedr_version is None:
+            hedr_version = _HEDR_VERSION.get(game, 0.94)
         lib = _ffi.load_lib()
-        ptr = lib.bethkit_plugin_writer_new(int(game), form_version)
+        ptr = lib.bethkit_plugin_writer_new(int(game), hedr_version)
         if not ptr:
             _ffi.raise_last_error(lib)
         self.__ptr = ptr

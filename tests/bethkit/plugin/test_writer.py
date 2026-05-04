@@ -3,6 +3,8 @@ Copyright (c) Modding Forge
 """
 from __future__ import annotations
 
+import math
+import struct
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
@@ -14,6 +16,8 @@ from bethkit import (
     BethkitNativeError,
     BethkitOwnershipError,
     Game,
+    Plugin,
+    PluginKind,
     PluginWriter,
     WritableGroup,
     WritableRecord,
@@ -273,7 +277,7 @@ class TestPluginWriter:
     def test_constructor_calls_writer_new(
         self, mocker: MockerFixture
     ) -> None:
-        """Tests that __init__ calls bethkit_plugin_writer_new."""
+        """Tests that __init__ calls bethkit_plugin_writer_new with game int."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -284,7 +288,10 @@ class TestPluginWriter:
         writer = PluginWriter(Game.SKYRIM_SE)
 
         # then
-        mock_lib.bethkit_plugin_writer_new.assert_called_once()
+        call_args = mock_lib.bethkit_plugin_writer_new.call_args
+        assert call_args is not None
+        game_arg, _hedr_arg = call_args.args
+        assert game_arg == int(Game.SKYRIM_SE)
         writer.close()
 
     def test_constructor_raises_on_null_ptr(
@@ -432,3 +439,111 @@ class TestPluginWriter:
         # when / then
         with pytest.raises(BethkitClosedError):
             writer.write_to_bytes()
+
+    def test_default_hedr_version_skyrim_se(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Tests that PluginWriter defaults to HEDR version 1.7 for SKYRIM_SE."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_plugin_writer_new.return_value = 0xCCCC
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with PluginWriter(Game.SKYRIM_SE):
+            pass
+
+        # then
+        _game, hedr = mock_lib.bethkit_plugin_writer_new.call_args.args
+        assert math.isclose(hedr, 1.7, abs_tol=1e-4)
+
+    def test_default_hedr_version_fallout4(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Tests that PluginWriter defaults to HEDR version 0.95 for FALLOUT4."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_plugin_writer_new.return_value = 0xCCCC
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with PluginWriter(Game.FALLOUT4):
+            pass
+
+        # then
+        _game, hedr = mock_lib.bethkit_plugin_writer_new.call_args.args
+        assert math.isclose(hedr, 0.95, abs_tol=1e-4)
+
+    def test_explicit_hedr_version_is_forwarded(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Tests that an explicit hedr_version overrides the per-game default."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_plugin_writer_new.return_value = 0xCCCC
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with PluginWriter(Game.SKYRIM_SE, hedr_version=1.71):
+            pass
+
+        # then
+        _game, hedr = mock_lib.bethkit_plugin_writer_new.call_args.args
+        assert math.isclose(hedr, 1.71, abs_tol=1e-4)
+
+    @pytest.mark.integration
+    def test_round_trip_produces_correct_hedr_version(self) -> None:
+        """
+        Integration: PluginWriter serialises the correct HEDR version.
+
+        Writes an empty SSE plugin via PluginWriter, then reads the
+        raw HEDR float from the serialised bytes to confirm it equals 1.7
+        and not 44.0 (the former incorrect default).
+
+        Requires the real bethkit_ffi library.
+        """
+
+        # given
+        with PluginWriter(Game.SKYRIM_SE) as writer:
+            data = writer.write_to_bytes()
+
+        # when — HEDR subrecord starts at byte 32 inside the TES4 record.
+        # Layout: TES4(4) + data_size(4) + flags(4) + form_id(4) +
+        #         vc(4) + form_version(2) + unknown(2) = 24 B header,
+        #         then first subrecord: "HEDR"(4) + size(2) = 6 B, then data.
+        hedr_value: float = struct.unpack_from("<f", data, 30)[0]
+
+        # then
+        assert math.isclose(hedr_value, 1.7, abs_tol=0.01)
+
+    @pytest.mark.integration
+    def test_round_trip_write_then_parse(self) -> None:
+        """
+        Integration: a plugin written by PluginWriter can be parsed back.
+
+        Writes a minimal SSE plugin with one NPC_ group containing one
+        record, then re-parses the bytes and verifies the structure.
+
+        Requires the real bethkit_ffi library.
+        """
+
+        # given — build a minimal plugin in-memory
+        with WritableRecord.new(b"NPC_", form_id=0x000D62) as rec:
+            rec.add_subrecord(b"EDID", b"TestNPC\x00")
+            with WritableGroup.new(b"NPC_") as grp:
+                grp.add_record(rec)
+                with PluginWriter(Game.SKYRIM_SE) as writer:
+                    writer.add_group(grp)
+                    data = writer.write_to_bytes()
+
+        # when
+        with Plugin.from_bytes(data, Game.SKYRIM_SE) as plugin:
+            kind = plugin.kind
+            group_count = plugin.group_count
+
+        # then
+        assert kind == PluginKind.FULL
+        assert group_count == 1

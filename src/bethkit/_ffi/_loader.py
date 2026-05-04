@@ -514,6 +514,9 @@ def _declare(lib: ctypes.CDLL) -> None:
 
     lib.bethkit_field_entries_free.restype = None
     lib.bethkit_field_entries_free.argtypes = [_vp]
+    # NOTE: bethkit_field_entries_free is never called directly from Python.
+    # NOTE: The entries buffer is freed transitively by bethkit_record_view_free.
+    # NOTE: Declared here to keep the 1:1 FFI mapping intact.
 
     lib.bethkit_field_values_len.restype = _sz
     lib.bethkit_field_values_len.argtypes = [_vp]
@@ -523,6 +526,9 @@ def _declare(lib: ctypes.CDLL) -> None:
 
     lib.bethkit_field_values_free.restype = None
     lib.bethkit_field_values_free.argtypes = [_vp]
+    # NOTE: bethkit_field_values_free is never called directly from Python.
+    # NOTE: The values buffer is freed transitively by bethkit_record_view_free.
+    # NOTE: Declared here to keep the 1:1 FFI mapping intact.
 
     lib.bethkit_plugin_writer_new.restype = _vp
     lib.bethkit_plugin_writer_new.argtypes = [_i32, _f32]
