@@ -15,11 +15,11 @@ Python bindings for [bethkit](https://github.com/Modding-Forge/bethkit) - a fast
 
 ## Requirements
 
-| Requirement     | Version  |
-| --------------- | -------- |
-| Python          | ≥ 3.10   |
-| pydantic        | ≥ 2.0    |
-| bethkit\_ffi    | matching |
+| Requirement  | Version  |
+| ------------ | -------- |
+| Python       | ≥ 3.10  |
+| pydantic     | ≥ 2.0   |
+| bethkit\_ffi | matching |
 
 Place `bethkit_ffi.dll` (Windows), `libbethkit_ffi.so` (Linux), or `libbethkit_ffi.dylib` (macOS) next to the package, or set the `BETHKIT_LIB` environment variable to the full path of the library.
 
@@ -29,7 +29,7 @@ Place `bethkit_ffi.dll` (Windows), `libbethkit_ffi.so` (Linux), or `libbethkit_f
 uv add bethkit
 ```
 
-Or
+or
 
 ```sh
 pip install bethkit
@@ -123,4 +123,3 @@ uv tool run pyright src/ tests/
 ## License
 
 Apache-2.0 - see [LICENSE](LICENSE).
-
