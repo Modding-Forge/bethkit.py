@@ -13,14 +13,148 @@ Binary layout (SSE / Skyrim Special Edition plugin format):
 """
 from __future__ import annotations
 
+import io
+import json
 import struct
-from typing import TYPE_CHECKING, Optional
+import sys
+import urllib.request
+import zipfile
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Optional
 from unittest.mock import MagicMock
 
 import pytest
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
+
+_GITHUB_API = (
+    "https://api.github.com/repos/Modding-Forge/bethkit/releases/latest"
+)
+_GITHUB_HEADERS: dict[str, str] = {
+    "Accept": "application/vnd.github+json",
+    "User-Agent": "bethkit.py/tests",
+    "X-GitHub-Api-Version": "2022-11-28",
+}
+
+
+def _native_lib_name() -> str:
+    """
+    Return the platform-specific name of the bethkit native library.
+
+    Returns:
+        str: Library file name for the current OS.
+    """
+
+    if sys.platform == "win32":
+        return "bethkit_ffi.dll"
+    if sys.platform == "darwin":
+        return "libbethkit_ffi.dylib"
+    return "libbethkit_ffi.so"
+
+
+def _zip_asset_name() -> str:
+    """
+    Return the platform-specific ZIP asset name used in GitHub releases.
+
+    Returns:
+        str: ZIP asset name for the current OS.
+    """
+
+    if sys.platform == "win32":
+        return "windows-x64"
+    if sys.platform == "darwin":
+        return "macos-x64"
+    return "linux-x64"
+
+
+def _try_download_native_lib() -> None:
+    """
+    Attempt to download the bethkit native library from the latest GitHub
+    release ZIP and extract it next to the package so ``_ffi.load_lib()``
+    finds it.
+
+    The ZIP is expected to have a flat layout with the library at its root
+    (e.g. ``bethkit_ffi.dll`` directly, not inside subdirectories).
+
+    Silently does nothing on any network or API error.
+    """
+
+    lib_name = _native_lib_name()
+    dest: Path = Path(__file__).parent.parent / "src" / "bethkit" / lib_name
+
+    if dest.exists():
+        return
+
+    try:
+        req = urllib.request.Request(_GITHUB_API, headers=_GITHUB_HEADERS)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            release: Any = json.loads(resp.read())
+    except Exception:
+        return
+
+    platform_suffix = _zip_asset_name()
+    download_url: Optional[str] = None
+    assets: list[dict[str, Any]] = release.get("assets") or []
+    for asset in assets:
+        name = asset.get("name", "")
+        if isinstance(name, str) and name.endswith(f"-{platform_suffix}.zip"):
+            url = asset.get("browser_download_url")
+            if isinstance(url, str):
+                download_url = url
+            break
+
+    if not download_url:
+        return
+
+    try:
+        with urllib.request.urlopen(download_url, timeout=60) as resp:
+            zip_data = resp.read()
+    except Exception:
+        return
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
+            if lib_name in zf.namelist():
+                dest.write_bytes(zf.read(lib_name))
+    except Exception:
+        pass
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """
+    Download the platform-specific bethkit native library before test
+    collection when it is not already present.
+    """
+
+    _try_download_native_lib()
+
+
+def pytest_collection_modifyitems(
+    config: pytest.Config, items: list[pytest.Item]
+) -> None:
+    """
+    Automatically skip tests marked ``integration`` when the native library
+    is unavailable.
+    """
+
+    try:
+        from bethkit._ffi import load_lib
+
+        load_lib()
+        _lib_available = True
+    except Exception:
+        _lib_available = False
+
+    if _lib_available:
+        return
+
+    skip_marker = pytest.mark.skip(
+        reason="bethkit_ffi native library not available"
+    )
+    for item in items:
+        if item.get_closest_marker("integration"):
+            item.add_marker(skip_marker)
 
 
 def build_hedr(

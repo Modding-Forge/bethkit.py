@@ -119,8 +119,8 @@ class WritableRecord:
             ValueError: If *signature* is not exactly 4 bytes.
         """
 
-        lib = _ffi.load_lib()
         buf = _sig_buf(signature)
+        lib = _ffi.load_lib()
         ptr = lib.bethkit_writable_record_new(
             buf, flags, form_id, form_version
         )

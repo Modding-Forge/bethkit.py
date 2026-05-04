@@ -274,16 +274,86 @@ class TestStringTable:
         mock_lib: MagicMock = mocker.MagicMock()
         mock_lib.bethkit_string_table_new.return_value = 0xAAAA
         mock_lib.bethkit_string_table_kind.return_value = int(
-            StringFileKind.DLSTRINGS
+            StringFileKind.DL_STRINGS
         )
         mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
 
         # when
-        with StringTable.new(StringFileKind.DLSTRINGS) as table:
+        with StringTable.new(StringFileKind.DL_STRINGS) as table:
             kind = table.kind
 
         # then
-        assert kind == StringFileKind.DLSTRINGS
+        assert kind == StringFileKind.DL_STRINGS
+
+    def test_len_delegates_to_native(self, mocker: MockerFixture) -> None:
+        """Tests that __len__() delegates to bethkit_string_table_len."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_string_table_new.return_value = 0xAAAA
+        mock_lib.bethkit_string_table_len.return_value = 7
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with StringTable.new(StringFileKind.STRINGS) as table:
+            count = len(table)
+
+        # then
+        assert count == 7
+
+    def test_insert_new_returns_assigned_id(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Tests that insert_new() returns the ID assigned by the native call."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_string_table_new.return_value = 0xAAAA
+        mock_lib.bethkit_string_table_insert_new.return_value = 0
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with StringTable.new(StringFileKind.STRINGS) as table:
+            assigned_id = table.insert_new(b"Dragon\x00")
+
+        # then
+        assert isinstance(assigned_id, int)
+        mock_lib.bethkit_string_table_insert_new.assert_called_once()
+
+    def test_write_to_file_calls_native(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """Tests that write_to_file() delegates to
+        bethkit_string_table_write_to_file."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_string_table_new.return_value = 0xAAAA
+        mock_lib.bethkit_string_table_write_to_file.return_value = 0
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with StringTable.new(StringFileKind.STRINGS) as table:
+            table.write_to_file(tmp_path / "Skyrim_english.strings")
+
+        # then
+        mock_lib.bethkit_string_table_write_to_file.assert_called_once()
+
+    def test_write_to_file_raises_after_close(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """Tests that write_to_file() raises BethkitClosedError after close()."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_string_table_new.return_value = 0xAAAA
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+        table = StringTable.new(StringFileKind.STRINGS)
+        table.close()
+
+        # when / then
+        with pytest.raises(BethkitClosedError):
+            table.write_to_file(tmp_path / "out.strings")
 
 
 class TestLocalizationSet:
@@ -339,10 +409,10 @@ class TestLocalizationSet:
         # then
         mock_lib.bethkit_localization_set_free.assert_called_once()
 
-    def test_closed_set_raises_on_get_string(
+    def test_closed_set_raises_on_get(
         self, mocker: MockerFixture
     ) -> None:
-        """Tests that get_string() raises BethkitClosedError after close()."""
+        """Tests that get() raises BethkitClosedError after close()."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -353,4 +423,95 @@ class TestLocalizationSet:
 
         # when / then
         with pytest.raises(BethkitClosedError):
-            loc.get_string(1)
+            loc.get(StringFileKind.STRINGS, 1)
+
+    def test_get_returns_none_for_missing_id(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Tests that get() returns None when FFI returns a null pointer."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_localization_set_new.return_value = 0xBBBB
+        mock_lib.bethkit_localization_set_get.return_value = 0
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with LocalizationSet.new() as loc:
+            result = loc.get(StringFileKind.STRINGS, 9999)
+
+        # then
+        assert result is None
+
+    def test_get_returns_bytes_for_found_id(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Tests that get() returns raw bytes for a found string ID."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_localization_set_new.return_value = 0xBBBB
+        mock_lib.bethkit_localization_set_get.return_value = 0xCCCC
+        payload = b"Iron Dagger\x00"
+        mocker.patch("ctypes.string_at", return_value=payload)
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with LocalizationSet.new() as loc:
+            result = loc.get(StringFileKind.STRINGS, 1)
+
+        # then
+        assert result == payload
+
+    def test_get_str_strips_null_and_decodes(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Tests that get_str() strips trailing null and decodes as UTF-8."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_localization_set_new.return_value = 0xBBBB
+        mock_lib.bethkit_localization_set_get.return_value = 0xCCCC
+        mocker.patch("ctypes.string_at", return_value=b"Wooden Sword\x00")
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with LocalizationSet.new() as loc:
+            result = loc.get_str(StringFileKind.STRINGS, 1)
+
+        # then
+        assert result == "Wooden Sword"
+
+    def test_set_calls_native(self, mocker: MockerFixture) -> None:
+        """Tests that set() delegates to bethkit_localization_set_set."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_localization_set_new.return_value = 0xBBBB
+        mock_lib.bethkit_localization_set_set.return_value = 0
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with LocalizationSet.new() as loc:
+            loc.set(StringFileKind.STRINGS, 1, b"Steel Sword\x00")
+
+        # then
+        mock_lib.bethkit_localization_set_set.assert_called_once()
+
+    def test_write_calls_native(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """Tests that write() delegates to bethkit_localization_set_write."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_localization_set_new.return_value = 0xBBBB
+        mock_lib.bethkit_localization_set_write.return_value = 0
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with LocalizationSet.new() as loc:
+            loc.write(tmp_path / "Skyrim.esp", "english")
+
+        # then
+        mock_lib.bethkit_localization_set_write.assert_called_once()

@@ -58,9 +58,10 @@ def _find_library() -> Path:
 
     pkg_dir = Path(__file__).parent
     for name in candidates:
-        path = pkg_dir / name
-        if path.exists():
-            return path
+        for search_dir in (pkg_dir, pkg_dir.parent):
+            path = search_dir / name
+            if path.exists():
+                return path
 
     return Path(candidates[0])
 
@@ -88,7 +89,11 @@ def load_lib() -> ctypes.CDLL:
 
             path = _find_library()
             try:
-                loaded = ctypes.CDLL(str(path))
+                if sys.platform == "win32" and path.is_absolute():
+                    with os.add_dll_directory(str(path.parent)):
+                        loaded = ctypes.CDLL(str(path))
+                else:
+                    loaded = ctypes.CDLL(str(path))
             except OSError as exc:
                 raise BethkitLibraryNotFoundError(
                     f"Cannot load bethkit native library '{path}': {exc}. "

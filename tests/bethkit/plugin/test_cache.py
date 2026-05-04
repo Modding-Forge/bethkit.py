@@ -223,6 +223,7 @@ class TestPluginCache:
             "bethkit.plugin.cache.BethkitGlobalFormId",
             return_value=out_struct,
         )
+        mocker.patch("bethkit.plugin.cache.ctypes.byref", return_value=out_struct)
         mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
 
         # when

@@ -176,3 +176,78 @@ class TestLoadOrder:
         # when / then
         with pytest.raises(BethkitClosedError):
             lo.push("Skyrim.esm", PluginKind.FULL)
+
+    def test_len_delegates_to_native(self, mocker: MockerFixture) -> None:
+        """Tests that __len__() delegates to bethkit_load_order_len."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_load_order_new.return_value = 0xABCD
+        mock_lib.bethkit_load_order_len.return_value = 3
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with LoadOrder() as lo:
+            count = len(lo)
+
+        # then
+        assert count == 3
+
+    def test_len_raises_after_close(self, mocker: MockerFixture) -> None:
+        """Tests that __len__() raises BethkitClosedError after close()."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_load_order_new.return_value = 0xABCD
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+        lo = LoadOrder()
+        lo.close()
+
+        # when / then
+        with pytest.raises(BethkitClosedError):
+            _ = len(lo)
+
+    def test_resolve_returns_global_form_id(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Tests that resolve() wraps the native result in a GlobalFormId."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_load_order_new.return_value = 0xABCD
+        mock_lib.bethkit_load_order_resolve.return_value = 0
+
+        out_struct: MagicMock = mocker.MagicMock()
+        out_struct.plugin_name = b"Skyrim.esm"
+        out_struct.object_id = 0x12E49
+        mocker.patch(
+            "bethkit.load_order.BethkitGlobalFormId", return_value=out_struct
+        )
+        mocker.patch("bethkit.load_order.ctypes.byref", return_value=out_struct)
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with LoadOrder() as lo:
+            gfid = lo.resolve(0x0012E49, "Skyrim.esm")
+
+        # then
+        assert gfid.plugin_name == "Skyrim.esm"
+        assert gfid.object_id == 0x12E49
+
+    def test_repr_shows_closed_when_closed(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Tests that __repr__() returns '<LoadOrder closed>' after close()."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_load_order_new.return_value = 0xABCD
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+        lo = LoadOrder()
+        lo.close()
+
+        # when
+        result = repr(lo)
+
+        # then
+        assert result == "<LoadOrder closed>"

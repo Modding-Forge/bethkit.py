@@ -1,0 +1,121 @@
+name: Build
+
+on:
+  push:
+    branches: ["master", "main"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["master", "main"]
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Lint: ruff + pyright on Linux (fast, no matrix needed).
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv pip install -e ".[dev]"
+
+      - name: Ruff check
+        run: uv tool run ruff check src/ tests/
+
+      - name: Pyright
+        run: uv tool run pyright src/ tests/
+
+  # ---------------------------------------------------------------------------
+  # Build platform wheels + run the test suite on every supported platform.
+  # The native bethkit_ffi library is pulled from the latest bethkit release.
+  # ---------------------------------------------------------------------------
+  build:
+    needs: lint
+    name: Build (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: windows-x64
+            zip-suffix: windows-x64
+            dll: bethkit_ffi.dll
+
+          - os: ubuntu-latest
+            label: linux-x64
+            zip-suffix: linux-x64
+            dll: libbethkit_ffi.so
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv pip install -e ".[dev]"
+
+      # Download the native library from the latest bethkit GitHub release.
+      # The ZIP has a flat layout: the DLL sits directly at the root.
+      - name: Download bethkit native library
+        shell: bash
+        run: |
+          BROWSER_URL=$(curl -fsSL \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/Modding-Forge/bethkit/releases/latest \
+            | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          suffix = '${{ matrix.zip-suffix }}'
+          for a in data.get('assets', []):
+              if a['name'].endswith(f'-{suffix}.zip'):
+                  print(a['browser_download_url'])
+                  break
+          ")
+          curl -fsSL -o native.zip "$BROWSER_URL"
+          unzip -j native.zip "${{ matrix.dll }}" -d src/bethkit/
+          echo "BETHKIT_LIB=$(pwd)/src/bethkit/${{ matrix.dll }}" >> "$GITHUB_ENV"
+
+      - name: Run tests
+        run: uv run pytest tests/ -q
+
+      - name: Build wheel
+        run: uv build --wheel
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.label }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Publish to PyPI when a version tag is pushed (v*).
+  # Requires a PyPI API token stored as the PYPI_TOKEN secret.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish to PyPI
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -3,6 +3,7 @@ Copyright (c) Modding Forge
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
@@ -72,6 +73,29 @@ class TestWritableRecord:
         # then
         assert isinstance(rec, WritableRecord)
         rec.close()
+
+    def test_new_with_explicit_flags_form_id_form_version(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Tests that new() passes flags, form_id and form_version to FFI."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_writable_record_new.return_value = 0xABCD
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with WritableRecord.new(
+            b"NPC_", flags=0x40, form_id=0x000D62, form_version=44
+        ):
+            pass
+
+        # then
+        call_args = mock_lib.bethkit_writable_record_new.call_args
+        _sig, flags, form_id, form_version = call_args.args
+        assert flags == 0x40
+        assert form_id == 0x000D62
+        assert form_version == 44
 
     def test_transfer_ptr_returns_and_zeroes_handle(
         self, mocker: MockerFixture
@@ -336,3 +360,75 @@ class TestPluginWriter:
         with pytest.raises(BethkitClosedError):
             writer.add_group(group)
         group.close()
+
+    def test_write_to_file_calls_native(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """Tests that write_to_file() delegates to
+        bethkit_plugin_writer_write_to_file."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_plugin_writer_new.return_value = 0xCCCC
+        mock_lib.bethkit_plugin_writer_write_to_file.return_value = 0
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with PluginWriter(Game.SKYRIM_SE) as writer:
+            writer.write_to_file(tmp_path / "out.esp")
+
+        # then
+        mock_lib.bethkit_plugin_writer_write_to_file.assert_called_once()
+
+    def test_write_to_file_raises_after_close(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """Tests that write_to_file() raises BethkitClosedError after close()."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_plugin_writer_new.return_value = 0xCCCC
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+        writer = PluginWriter(Game.SKYRIM_SE)
+        writer.close()
+
+        # when / then
+        with pytest.raises(BethkitClosedError):
+            writer.write_to_file(tmp_path / "out.esp")
+
+    def test_write_to_bytes_returns_bytes(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Tests that write_to_bytes() returns a bytes object."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_plugin_writer_new.return_value = 0xCCCC
+        fake_ptr: int = 0xDDDD
+        mock_lib.bethkit_plugin_writer_write_to_bytes.return_value = fake_ptr
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+        mocker.patch("ctypes.string_at", return_value=b"\x54\x45\x53\x34")
+
+        # when
+        with PluginWriter(Game.SKYRIM_SE) as writer:
+            result = writer.write_to_bytes()
+
+        # then
+        assert isinstance(result, bytes)
+        mock_lib.bethkit_bytes_free.assert_called_once()
+
+    def test_write_to_bytes_raises_after_close(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Tests that write_to_bytes() raises BethkitClosedError after close()."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_plugin_writer_new.return_value = 0xCCCC
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+        writer = PluginWriter(Game.SKYRIM_SE)
+        writer.close()
+
+        # when / then
+        with pytest.raises(BethkitClosedError):
+            writer.write_to_bytes()

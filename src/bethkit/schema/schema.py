@@ -4,7 +4,7 @@ Copyright (c) Modding Forge
 from __future__ import annotations
 
 import ctypes
-from typing import Optional, Union
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -51,18 +51,17 @@ class FlagsVal(BaseModel, frozen=True):
     """Names of all currently set bits."""
 
 
-FieldValue = Union[
-    int,
-    float,
-    str,
-    bytes,
-    TypedFormId,
-    EnumVal,
-    FlagsVal,
-    "list[NamedField]",
-    "list[FieldValue]",
-    None,
-]
+FieldValue = (
+    int
+    | float
+    | str
+    | bytes
+    | TypedFormId
+    | EnumVal
+    | FlagsVal
+    | list[Any]  # struct fields: list[NamedField]; array fields: list[FieldValue]
+    | None
+)
 """
 Union of all possible decoded field value types.
 
@@ -85,6 +84,9 @@ class NamedField(BaseModel):
 
     value: FieldValue
     """Decoded value for this field."""
+
+
+NamedField.model_rebuild()
 
 
 def _decode_field_value(raw: BethkitFieldValue, lib: ctypes.CDLL) -> FieldValue:
