@@ -6,9 +6,6 @@ on:
       - "v*"
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Build platform wheels (same matrix as the CI build job).
-  # ---------------------------------------------------------------------------
   build:
     name: Build (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
@@ -76,17 +73,12 @@ jobs:
           path: dist/*.whl
           if-no-files-found: error
 
-  # ---------------------------------------------------------------------------
-  # Create a GitHub release with all wheels as assets, then publish to PyPI.
-  # Uses OIDC trusted publishing — no API token required.
-  # ---------------------------------------------------------------------------
-  release:
-    name: GitHub Release & PyPI
+  publish-pypi:
+    name: Publish to PyPI
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # create GitHub release
-      id-token: write   # OIDC token for PyPI trusted publishing
+      id-token: write   # required for OIDC Trusted Publisher
 
     steps:
       - uses: actions/download-artifact@v4
@@ -95,12 +87,27 @@ jobs:
           merge-multiple: true
           path: dist/
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Publish
+        run: uv publish
+
+  publish-github:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          merge-multiple: true
+          path: dist/
+
+      - uses: softprops/action-gh-release@v2
         with:
           draft: false
           generate_release_notes: true
           files: dist/*.whl
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1

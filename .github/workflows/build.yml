@@ -7,9 +7,6 @@ on:
     branches: ["master", "main"]
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Lint: ruff + pyright on Linux (fast, no matrix needed).
-  # ---------------------------------------------------------------------------
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -29,10 +26,6 @@ jobs:
       - name: Pyright
         run: uv tool run pyright src/ tests/
 
-  # ---------------------------------------------------------------------------
-  # Build platform wheels + run the test suite on every supported platform.
-  # The native bethkit_ffi library is pulled from the latest bethkit release.
-  # ---------------------------------------------------------------------------
   build:
     needs: lint
     name: Build (${{ matrix.label }})

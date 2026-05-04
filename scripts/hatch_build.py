@@ -71,7 +71,6 @@ class CustomBuildHook(BuildHookInterface):
         root = Path(self.root).resolve()
         rust_root = root.parent / "bethkit"
 
-        # --- 1. Locate shared library -------------------------------------------
         dll_name = _dll_name()
 
         # Allow explicit override via environment variable.
