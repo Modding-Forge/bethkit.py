@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
 
-Hatch build hook that bundles the native ``bethkit_ffi`` shared library and
-optionally regenerates ``.pyi`` stubs from ``bethkit.h``.
+Hatch build hook that bundles the native ``bethkit_ffi`` shared library into
+the platform wheel.
 
 During ``uv build`` / ``hatch build``:
 
@@ -12,13 +12,13 @@ During ``uv build`` / ``hatch build``:
    The ``BETHKIT_LIB`` environment variable can override the search path.
 2. The library is copied into ``src/bethkit/`` so it lands next to the Python
    modules inside the wheel.  It is removed again in ``finalize()`` to keep
-   the source tree clean.
+   the source tree clean.  If ``BETHKIT_LIB`` already points into
+   ``src/bethkit/`` (as the CI workflow does), the copy is skipped.
 3. The wheel tag is set to the current platform so pip installs only the
    compatible wheel.
-4. If ``bethkit.h`` is present, ``.pyi`` stubs are regenerated from it.
 
-If neither the library nor the header can be found (e.g. pure-sdist build),
-the hook exits gracefully and the pre-committed files are used unchanged.
+If the library cannot be found (e.g. pure-sdist build), the hook exits
+gracefully and the wheel is built without a native library.
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ from __future__ import annotations
 import os
 import platform
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -69,7 +68,6 @@ class CustomBuildHook(BuildHookInterface):
             version: Package version string passed by Hatch.
             build_data: Mutable build metadata dict.
         """
-        scripts_dir = Path(__file__).parent.resolve()
         root = Path(self.root).resolve()
         rust_root = root.parent / "bethkit"
 
@@ -87,9 +85,13 @@ class CustomBuildHook(BuildHookInterface):
 
         if dll_src.exists():
             dest = root / "src" / "bethkit" / dll_name
-            shutil.copy2(dll_src, dest)
-            self._copied_dll = dest
-            # Tell hatchling to include this file even if it is gitignored.
+            # Only copy when source and destination differ (e.g. BETHKIT_LIB
+            # already points into src/bethkit/ as the CI workflow does).
+            if dll_src.resolve() != dest.resolve():
+                shutil.copy2(dll_src, dest)
+                self._copied_dll = dest
+            # Always register as an artifact so hatchling includes it even
+            # when the file is gitignored.
             build_data.setdefault("artifacts", []).append(str(dest))
             build_data["pure-python"] = False
             build_data["tag"] = _wheel_tag()
@@ -101,21 +103,12 @@ class CustomBuildHook(BuildHookInterface):
                 flush=True,
             )
 
-        # --- 2. Regenerate .pyi stubs -------------------------------------------
-        header = rust_root / "crates" / "bethkit-ffi" / "bethkit.h"
-
-        if not header.exists():
-            print("bethkit.h not found — using pre-committed .pyi stubs", flush=True)
-            return
-
-        print(f"Regenerating .pyi stubs from {header} …", flush=True)
-        subprocess.run(
-            [sys.executable, str(scripts_dir / "gen_stubs.py"), "--header", str(header)],
-            cwd=root,
-            check=True,
-        )
-
-    def finalize(self, version: str, build_data: dict[str, Any], artifact_path: str) -> None:
+    def finalize(
+        self,
+        version: str,
+        build_data: dict[str, Any],
+        artifact_path: str,
+    ) -> None:
         """Remove the temporary DLL copy from the source tree.
 
         Args:

@@ -7,14 +7,14 @@ path = "scripts/hatch_build.py"
 
 [project]
 name = "bethkit"
-version = "0.1.0"
+version = "1.0.0"
 description = "Python bindings for bethkit — a Bethesda plugin and archive toolkit"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.10"
 keywords = ["bethesda", "skyrim", "fallout", "esp", "esm", "bsa", "ba2", "modding"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
@@ -26,9 +26,11 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = ["pydantic>=2.0"]
+authors = [{ name = "Modding Forge", email = "info@moddingforge.com" }]
 
 [project.urls]
-Repository = "https://github.com/Modding-Forge/bethkit"
+Homepage = "https://moddingforge.com/"
+Repository = "https://github.com/Modding-Forge/bethkit.py"
 
 [project.optional-dependencies]
 dev = [
@@ -56,6 +58,9 @@ select = ["E", "F", "I", "UP", "ANN", "N"]
 ignore = [
     "UP045",   # Optional[T] is required by project conventions
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"*.pyi" = ["E501"]  # generated stubs may have long docstring lines
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

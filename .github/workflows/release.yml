@@ -1,40 +1,15 @@
-name: Build
+name: Release
 
 on:
   push:
-    branches: ["master", "main"]
-  pull_request:
-    branches: ["master", "main"]
+    tags:
+      - "v*"
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Lint: ruff + pyright on Linux (fast, no matrix needed).
-  # ---------------------------------------------------------------------------
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Install dependencies
-        run: uv sync --extra dev
-
-      - name: Ruff check
-        run: uv tool run ruff check src/ tests/
-
-      - name: Pyright
-        run: uv tool run pyright src/ tests/
-
-  # ---------------------------------------------------------------------------
-  # Build platform wheels + run the test suite on every supported platform.
-  # The native bethkit_ffi library is pulled from the latest bethkit release.
+  # Build platform wheels (same matrix as the CI build job).
   # ---------------------------------------------------------------------------
   build:
-    needs: lint
     name: Build (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -61,8 +36,6 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --extra dev
 
-      # Download the native library from the latest bethkit GitHub release.
-      # The ZIP has a flat layout: the DLL sits directly at the root.
       - name: Download bethkit native library
         shell: bash
         run: |
@@ -95,3 +68,32 @@ jobs:
           name: wheel-${{ matrix.label }}
           path: dist/*.whl
           if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Create a GitHub release with all wheels as assets, then publish to PyPI.
+  # Uses OIDC trusted publishing — no API token required.
+  # ---------------------------------------------------------------------------
+  release:
+    name: GitHub Release & PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # create GitHub release
+      id-token: write   # OIDC token for PyPI trusted publishing
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheel-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          generate_release_notes: true
+          files: dist/*.whl
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

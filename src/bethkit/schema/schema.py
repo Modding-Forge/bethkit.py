@@ -94,7 +94,7 @@ def _decode_field_value(raw: BethkitFieldValue, lib: ctypes.CDLL) -> FieldValue:
     Decode a ctypes ``BethkitFieldValue`` into a Python :data:`FieldValue`.
 
     Args:
-        raw: The ctypes ``BethkitFieldValue`` struct instance.
+        raw (BethkitFieldValue): The ctypes ``BethkitFieldValue`` struct instance.
         lib (ctypes.CDLL): Loaded bethkit native library handle.
 
     Returns:

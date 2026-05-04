@@ -201,7 +201,6 @@ class Record:
         Returns:
             bytes: Four-byte signature (e.g. ``b"NPC_"``).
 
-
         Raises:
             BethkitNativeError: If the native call fails.
         """
@@ -483,7 +482,13 @@ class Group:
             str: Developer-friendly representation showing type and count.
         """
 
-        return f"<Group type={self.group_type} children={self.child_count}>"
+        try:
+            return (
+                f"<Group type={self.group_type} children={self.child_count}>"
+            )
+        except BethkitNativeError:
+            return "<Group ?>"
+
 
 
 class Plugin:

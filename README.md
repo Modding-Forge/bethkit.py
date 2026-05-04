@@ -1,34 +1,17 @@
 # bethkit.py
 
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue?logo=python)](https://www.python.org)
-[![Version](https://img.shields.io/badge/version-0.1.0-yellow)](pyproject.toml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) [![Python](https://img.shields.io/badge/python-3.10%2B-blue?logo=python)](https://www.python.org) [![PyPI](https://img.shields.io/pypi/v/bethkit?logo=pypi&logoColor=white)](https://pypi.org/project/bethkit/)
 
-> **⚠️ Alpha** — APIs may change before the first stable release.
-
-Python bindings for [bethkit](https://github.com/Modding-Forge/bethkit) — a
-fast Rust library for reading and writing Bethesda game plugin and archive
-files. `bethkit.py` wraps the `bethkit_ffi` C ABI via `ctypes`; no compiler
-or build tools required.
+Python bindings for [bethkit](https://github.com/Modding-Forge/bethkit) - a fast Rust library for reading and writing Bethesda game plugin and archive files. `bethkit.py` wraps the `bethkit_ffi` C ABI via `ctypes`; no compiler or build tools required.
 
 ## Features
 
-- **Plugin reading** — open `.esp`/`.esm`/`.esl` files by path or from
-  in-memory bytes; iterate groups and records; look up records by FormID
-  or EditorID; inspect sub-records
-- **Plugin writing** — build new plugins from scratch with `PluginWriter`,
-  `WritableGroup`, and `WritableRecord`
-- **BSA / BA2 archives** — open and extract entries from BSA (TES4/SSE) and
-  BA2 (GNRL/DX10) archives; write new archives with `BsaWriter`,
-  `Ba2GnrlWriter`, and `Ba2Dx10Writer`
-- **String tables** — read, edit, and write `.STRINGS`/`.DLSTRINGS`/
-  `.ILSTRINGS` localisation files; apply translation sets with
-  `LocalizationSet`
-- **Schema** — decode sub-records into typed `FieldValue` variants (integers,
-  floats, FormIDs, enums with resolved names, flags, structs, arrays) via
-  `RecordView` and `SchemaRegistry`
-- **Load-order utilities** — `LoadOrder`, `GlobalFormId`, and `PluginCache`
-  for winning-override lookups and EditorID search across multiple plugins
+- **Plugin reading** - open `.esp`/`.esm`/`.esl` files by path or from in-memory bytes; iterate groups and records; look up records by FormID or EditorID; inspect sub-records
+- **Plugin writing** - build new plugins from scratch with `PluginWriter`, `WritableGroup`, and `WritableRecord`
+- **BSA / BA2 archives** - open and extract entries from BSA (TES4/SSE) and BA2 (GNRL/DX10) archives; write new archives with `BsaWriter`, `Ba2GnrlWriter`, and `Ba2Dx10Writer`
+- **String tables** - read, edit, and write `.STRINGS`/`.DLSTRINGS`/`.ILSTRINGS` localisation files; apply translation sets with `LocalizationSet`
+- **Schema** - decode sub-records into typed `FieldValue` variants (integers, floats, FormIDs, enums with resolved names, flags, structs, arrays) via `RecordView` and `SchemaRegistry`
+- **Load-order utilities** - `LoadOrder`, `GlobalFormId`, and `PluginCache` for winning-override lookups and EditorID search across multiple plugins
 
 ## Requirements
 
@@ -38,20 +21,18 @@ or build tools required.
 | pydantic        | ≥ 2.0    |
 | bethkit\_ffi    | matching |
 
-Place `bethkit_ffi.dll` (Windows), `libbethkit_ffi.so` (Linux), or
-`libbethkit_ffi.dylib` (macOS) next to the package, or set the
-`BETHKIT_LIB` environment variable to the full path of the library.
+Place `bethkit_ffi.dll` (Windows), `libbethkit_ffi.so` (Linux), or `libbethkit_ffi.dylib` (macOS) next to the package, or set the `BETHKIT_LIB` environment variable to the full path of the library.
 
 ## Installation
 
 ```sh
-pip install bethkit
+uv add bethkit
 ```
 
-Or with [uv](https://github.com/astral-sh/uv):
+Or
 
 ```sh
-uv add bethkit
+pip install bethkit
 ```
 
 ## Quick Start
@@ -136,12 +117,10 @@ uv tool run pyright src/ tests/
 
 ## Related projects
 
-- [bethkit](https://github.com/Modding-Forge/bethkit) — the underlying Rust
-  library; `bethkit.py` wraps its C ABI
-- [SSE-Auto-Translator](https://github.com/Modding-Forge/SSE-Auto-Translator)
-  — uses `bethkit.py` to patch localised strings
+- [bethkit](https://github.com/Modding-Forge/bethkit) - the underlying Rust library; `bethkit.py` wraps its C ABI
+- [SSE-Auto-Translator](https://github.com/Modding-Forge/SSE-Auto-Translator) - uses `bethkit.py` to patch localised strings
 
 ## License
 
-Apache-2.0 — see [LICENSE](LICENSE).
+Apache-2.0 - see [LICENSE](LICENSE).
 

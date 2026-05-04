@@ -231,6 +231,7 @@ class TestLoadOrder:
             gfid = lo.resolve(0x0012E49, "Skyrim.esm")
 
         # then
+        assert gfid is not None
         assert gfid.plugin_name == "Skyrim.esm"
         assert gfid.object_id == 0x12E49
 

@@ -28,6 +28,8 @@ class GlobalFormId(BaseModel, frozen=True):
 
     def __str__(self) -> str:
         """
+        Return a human-readable representation of this FormID.
+
         Returns:
             str: Human-readable ``"PluginName:0xOBJECTID"`` representation.
         """

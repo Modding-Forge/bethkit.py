@@ -156,7 +156,8 @@ def copy_and_free_str(
 
     Args:
         ptr (int): Non-null ``c_void_p`` value pointing to the string.
-        free_fn: The matching ``*_free`` function to call after copying.
+        free_fn (Callable[[int], None]): The matching ``*_free`` function
+            to call after copying.
         lib (ctypes.CDLL): Loaded native library (unused here but kept
             for uniform call-site signature).
 

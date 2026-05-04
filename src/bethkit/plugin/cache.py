@@ -148,8 +148,10 @@ class PluginCache:
 
     def __len__(self) -> int:
         """
+        Return the number of plugins currently held in the cache.
+
         Returns:
-            int: Number of plugins currently held in the cache.
+            int: Number of plugins.
 
         Raises:
             BethkitClosedError: If this cache has already been closed.

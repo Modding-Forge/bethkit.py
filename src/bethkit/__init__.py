@@ -34,6 +34,7 @@ from .archive import Archive, ArchiveEntry, Ba2Dx10Writer, Ba2GnrlWriter, BsaWri
 from .enums import (
     Ba2Version,
     BsaVersion,
+    FieldValueKind,
     Game,
     PluginKind,
     StringFileKind,
@@ -67,6 +68,7 @@ __all__ = [
     "StringFileKind",
     "BsaVersion",
     "Ba2Version",
+    "FieldValueKind",
     # Plugin reading
     "Plugin",
     "Group",
