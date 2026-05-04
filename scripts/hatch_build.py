@@ -89,9 +89,10 @@ class CustomBuildHook(BuildHookInterface):
             if dll_src.resolve() != dest.resolve():
                 shutil.copy2(dll_src, dest)
                 self._copied_dll = dest
-            # Always register as an artifact so hatchling includes it even
-            # when the file is gitignored.
-            build_data.setdefault("artifacts", []).append(str(dest))
+            # Register as a relative artifact path so hatchling includes it
+            # even when the file is gitignored.
+            rel = dest.relative_to(root).as_posix()
+            build_data.setdefault("artifacts", []).append(rel)
             build_data["pure-python"] = False
             build_data["tag"] = _wheel_tag()
             print(f"Bundling {dll_src.name} → {dest}", flush=True)
