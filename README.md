@@ -117,7 +117,6 @@ uv tool run pyright src/ tests/
 ## Related projects
 
 - [bethkit](https://github.com/Modding-Forge/bethkit) - the underlying Rust library; `bethkit.py` wraps its C ABI
-- [SSE-Auto-Translator](https://github.com/Modding-Forge/SSE-Auto-Translator) - uses `bethkit.py` to patch localised strings
 
 ## License
 
