@@ -54,7 +54,14 @@ jobs:
           ")
           curl -fsSL -o native.zip "$BROWSER_URL"
           unzip -j native.zip "${{ matrix.dll }}" -d src/bethkit/
-          echo "BETHKIT_LIB=$(pwd)/src/bethkit/${{ matrix.dll }}" >> "$GITHUB_ENV"
+          # On Windows, $(pwd) returns a Unix-style path that PowerShell
+          # cannot resolve. cygpath converts it to a Windows path.
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            WIN_PATH=$(cygpath -w "$(pwd)/src/bethkit/${{ matrix.dll }}")
+            echo "BETHKIT_LIB=$WIN_PATH" >> "$GITHUB_ENV"
+          else
+            echo "BETHKIT_LIB=$(pwd)/src/bethkit/${{ matrix.dll }}" >> "$GITHUB_ENV"
+          fi
 
       - name: Run tests
         run: uv run pytest tests/ -q
