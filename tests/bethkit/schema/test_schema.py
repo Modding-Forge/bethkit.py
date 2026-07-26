@@ -11,10 +11,17 @@ from pydantic import ValidationError
 from bethkit import (
     Diagnostic,
     Game,
+    RecordEditor,
     SchemaCatalog,
     SchemaPackage,
     SemanticContext,
 )
+
+
+class _Record:
+    """Minimal record handle used by editor/view wrapper tests."""
+
+    _ptr = 404
 
 
 def test_catalog_embedded_is_owned(mock_lib: MagicMock) -> None:
@@ -69,3 +76,27 @@ def test_diagnostic_is_immutable() -> None:
 
     with pytest.raises(ValidationError):
         setattr(diagnostic, "message", "changed")
+
+
+def test_record_editor_sets_and_finishes(mock_lib: MagicMock) -> None:
+    """Typed edits delegate to ABI v2 and transfer the writable record."""
+    mock_lib.bethkit_schema_package_open.return_value = 202
+    mock_lib.bethkit_semantic_context_new.return_value = 303
+    mock_lib.bethkit_record_editor_new.return_value = 505
+    mock_lib.bethkit_record_editor_set_u64.return_value = 0
+    mock_lib.bethkit_record_editor_finish.return_value = 606
+
+    with SchemaPackage.open(Path("candidate.bkschema")) as package:
+        with SemanticContext(package) as context:
+            editor = RecordEditor.new(context, _Record())
+            editor.set("NPC_.DATA.level", 12)
+            writable = editor.finish()
+            writable.close()
+
+    mock_lib.bethkit_record_editor_set_u64.assert_called_once_with(
+        505,
+        b"NPC_.DATA.level",
+        0,
+        12,
+    )
+    mock_lib.bethkit_writable_record_free.assert_called_once_with(606)

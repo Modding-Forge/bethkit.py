@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 from pathlib import Path
-from typing import Any, Literal, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol
 
 from pydantic import BaseModel, ConfigDict
 
@@ -12,6 +12,9 @@ from .. import _ffi
 from .._error import BethkitClosedError
 from .._ffi import BethkitFieldValue
 from ..enums import FieldValueKind, Game
+
+if TYPE_CHECKING:
+    from ..plugin.writer import WritableRecord
 
 
 class TypedFormId(BaseModel, frozen=True):
@@ -328,6 +331,15 @@ class SemanticContext:
         """Create an owned semantic snapshot of a record."""
         return RecordView.new(self, record, localized=localized)
 
+    def edit(
+        self,
+        record: _RecordHandle,
+        *,
+        localized: bool = False,
+    ) -> RecordEditor:
+        """Create a lossless typed editor for a record."""
+        return RecordEditor.new(self, record, localized=localized)
+
     def close(self) -> None:
         """Release the native semantic context."""
         if self.__pointer:
@@ -412,6 +424,147 @@ class RecordView:
             self.__fields = None
 
     def __enter__(self) -> RecordView:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
+
+class RecordEditor:
+    """Owned lossless editor for one schema-covered record."""
+
+    def __init__(self, pointer: int) -> None:
+        self.__pointer = pointer
+
+    @classmethod
+    def new(
+        cls,
+        context: SemanticContext,
+        record: _RecordHandle,
+        *,
+        localized: bool = False,
+    ) -> RecordEditor:
+        """Create an editor from a semantic context and record."""
+        if not record._ptr:
+            raise BethkitClosedError("Record is closed or has no native pointer.")
+        lib = _ffi.load_lib()
+        pointer = lib.bethkit_record_editor_new(
+            context._native_pointer(),
+            record._ptr,
+            localized,
+        )
+        if not pointer:
+            _ffi.raise_last_error(lib)
+        return cls(pointer)
+
+    def __check_open(self) -> int:
+        if not self.__pointer:
+            raise BethkitClosedError("RecordEditor has already been closed.")
+        return self.__pointer
+
+    def set(
+        self,
+        path: str,
+        value: int | float | str | bytes,
+        *,
+        occurrence: int = 0,
+    ) -> None:
+        """Replace a typed field occurrence."""
+        lib = _ffi.load_lib()
+        pointer = self.__check_open()
+        encoded_path = _ffi.senc(path)
+        if isinstance(value, bytes):
+            data = (ctypes.c_uint8 * len(value)).from_buffer_copy(value)
+            result = lib.bethkit_record_editor_set_bytes(
+                pointer,
+                encoded_path,
+                occurrence,
+                data,
+                len(value),
+            )
+        elif isinstance(value, str):
+            result = lib.bethkit_record_editor_set_string(
+                pointer,
+                encoded_path,
+                occurrence,
+                _ffi.senc(value),
+            )
+        elif isinstance(value, float):
+            result = lib.bethkit_record_editor_set_f64(
+                pointer,
+                encoded_path,
+                occurrence,
+                value,
+            )
+        elif value < 0:
+            result = lib.bethkit_record_editor_set_i64(
+                pointer,
+                encoded_path,
+                occurrence,
+                value,
+            )
+        else:
+            result = lib.bethkit_record_editor_set_u64(
+                pointer,
+                encoded_path,
+                occurrence,
+                value,
+            )
+        if result != 0:
+            _ffi.raise_last_error(lib)
+
+    def set_form_id(
+        self,
+        path: str,
+        value: int,
+        *,
+        occurrence: int = 0,
+    ) -> None:
+        """Replace a FormID field occurrence."""
+        lib = _ffi.load_lib()
+        result = lib.bethkit_record_editor_set_form_id(
+            self.__check_open(),
+            _ffi.senc(path),
+            occurrence,
+            value,
+        )
+        if result != 0:
+            _ffi.raise_last_error(lib)
+
+    def remove(self, path: str, *, occurrence: int = 0) -> None:
+        """Remove a top-level field occurrence."""
+        lib = _ffi.load_lib()
+        result = lib.bethkit_record_editor_remove(
+            self.__check_open(),
+            _ffi.senc(path),
+            occurrence,
+        )
+        if result != 0:
+            _ffi.raise_last_error(lib)
+
+    def finish(self) -> WritableRecord:
+        """Consume the editor and return a writable record."""
+        from ..plugin.writer import WritableRecord
+
+        pointer = _ffi.load_lib().bethkit_record_editor_finish(self.__check_open())
+        if not pointer:
+            _ffi.raise_last_error(_ffi.load_lib())
+        self.__pointer = 0
+        return WritableRecord(pointer)
+
+    def close(self) -> None:
+        """Release the editor without keeping its changes."""
+        if self.__pointer:
+            _ffi.load_lib().bethkit_record_editor_free(self.__pointer)
+            self.__pointer = 0
+
+    def __enter__(self) -> RecordEditor:
         return self
 
     def __exit__(self, *_: object) -> None:

@@ -522,6 +522,47 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_semantic_context_free.restype = None
     lib.bethkit_semantic_context_free.argtypes = [_vp]
 
+    lib.bethkit_record_editor_new.restype = _vp
+    lib.bethkit_record_editor_new.argtypes = [_vp, _vp, _bl]
+
+    lib.bethkit_record_editor_free.restype = None
+    lib.bethkit_record_editor_free.argtypes = [_vp]
+
+    lib.bethkit_record_editor_set_i64.restype = _i32
+    lib.bethkit_record_editor_set_i64.argtypes = [_vp, _c, _sz, _i64]
+
+    lib.bethkit_record_editor_set_u64.restype = _i32
+    lib.bethkit_record_editor_set_u64.argtypes = [_vp, _c, _sz, _u64]
+
+    lib.bethkit_record_editor_set_f64.restype = _i32
+    lib.bethkit_record_editor_set_f64.argtypes = [
+        _vp,
+        _c,
+        _sz,
+        ctypes.c_double,
+    ]
+
+    lib.bethkit_record_editor_set_form_id.restype = _i32
+    lib.bethkit_record_editor_set_form_id.argtypes = [_vp, _c, _sz, _u32]
+
+    lib.bethkit_record_editor_set_string.restype = _i32
+    lib.bethkit_record_editor_set_string.argtypes = [_vp, _c, _sz, _c]
+
+    lib.bethkit_record_editor_set_bytes.restype = _i32
+    lib.bethkit_record_editor_set_bytes.argtypes = [
+        _vp,
+        _c,
+        _sz,
+        ctypes.POINTER(_u8),
+        _sz,
+    ]
+
+    lib.bethkit_record_editor_remove.restype = _i32
+    lib.bethkit_record_editor_remove.argtypes = [_vp, _c, _sz]
+
+    lib.bethkit_record_editor_finish.restype = _vp
+    lib.bethkit_record_editor_finish.argtypes = [_vp]
+
     lib.bethkit_record_view_new.restype = _vp
     lib.bethkit_record_view_new.argtypes = [_vp, _vp, _bl]
 
