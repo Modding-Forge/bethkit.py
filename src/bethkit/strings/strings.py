@@ -1,6 +1,7 @@
 """
 Copyright (c) Modding Forge
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -161,9 +162,7 @@ class StringTable:
             int: Number of entries in the table.
         """
 
-        return _ffi.load_lib().bethkit_string_table_len(
-            self.__check_open()
-        )
+        return _ffi.load_lib().bethkit_string_table_len(self.__check_open())
 
     def get(self, id: int) -> Optional[bytes]:
         """
@@ -181,9 +180,7 @@ class StringTable:
 
         lib = _ffi.load_lib()
         out_len = ctypes.c_size_t(0)
-        ptr = lib.bethkit_string_table_get(
-            self.__check_open(), id, ctypes.byref(out_len)
-        )
+        ptr = lib.bethkit_string_table_get(self.__check_open(), id, ctypes.byref(out_len))
         if not ptr:
             return None
         return bytes(ctypes.string_at(ptr, out_len.value))
@@ -220,9 +217,7 @@ class StringTable:
 
         lib = _ffi.load_lib()
         buf = _buf_from_bytes(data)
-        if lib.bethkit_string_table_insert(
-            self.__check_open(), id, buf, len(data)
-        ) != 0:
+        if lib.bethkit_string_table_insert(self.__check_open(), id, buf, len(data)) != 0:
             _ffi.raise_last_error(lib)
 
     def insert_new(self, data: bytes) -> int:
@@ -263,11 +258,7 @@ class StringTable:
             bool: ``True`` if the entry existed and was removed.
         """
 
-        return bool(
-            _ffi.load_lib().bethkit_string_table_remove(
-                self.__check_open(), id
-            )
-        )
+        return bool(_ffi.load_lib().bethkit_string_table_remove(self.__check_open(), id))
 
     def write_to_file(self, path: Path) -> None:
         """
@@ -282,9 +273,10 @@ class StringTable:
         """
 
         lib = _ffi.load_lib()
-        if lib.bethkit_string_table_write_to_file(
-            self.__check_open(), _ffi.enc(path)
-        ) != 0:
+        if (
+            lib.bethkit_string_table_write_to_file(self.__check_open(), _ffi.enc(path))
+            != 0
+        ):
             _ffi.raise_last_error(lib)
 
     def __repr__(self) -> str:
@@ -354,9 +346,7 @@ class LocalizationSet:
         return cls(ptr)
 
     @classmethod
-    def open(
-        cls, plugin_path: Path, language: str
-    ) -> LocalizationSet:
+    def open(cls, plugin_path: Path, language: str) -> LocalizationSet:
         """
         Load all localisation files for the given plugin and language.
 
@@ -413,9 +403,7 @@ class LocalizationSet:
         except Exception:
             pass
 
-    def get(
-        self, kind: StringFileKind, id: int
-    ) -> Optional[bytes]:
+    def get(self, kind: StringFileKind, id: int) -> Optional[bytes]:
         """
         Retrieve a string from the specified sub-table by its ID.
 
@@ -439,9 +427,7 @@ class LocalizationSet:
             return None
         return bytes(ctypes.string_at(ptr, out_len.value))
 
-    def get_str(
-        self, kind: StringFileKind, id: int
-    ) -> Optional[str]:
+    def get_str(self, kind: StringFileKind, id: int) -> Optional[str]:
         """
         Retrieve a string from the specified sub-table decoded as UTF-8.
 
@@ -459,9 +445,7 @@ class LocalizationSet:
             return None
         return raw.rstrip(b"\x00").decode("utf-8")
 
-    def set(
-        self, kind: StringFileKind, id: int, data: bytes
-    ) -> None:
+    def set(self, kind: StringFileKind, id: int, data: bytes) -> None:
         """
         Insert or overwrite an entry in the specified sub-table.
 
@@ -485,9 +469,7 @@ class LocalizationSet:
         ):
             _ffi.raise_last_error(lib)
 
-    def write(
-        self, plugin_path: Path, language: str
-    ) -> None:
+    def write(self, plugin_path: Path, language: str) -> None:
         """
         Write all sub-tables to disk next to *plugin_path*.
 

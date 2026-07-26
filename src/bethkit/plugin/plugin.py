@@ -1,6 +1,7 @@
 """
 Copyright (c) Modding Forge
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -306,9 +307,7 @@ class Record:
             _ffi.raise_last_error(lib)
         return SubRecord(ptr, self)
 
-    def find_subrecord(
-        self, sig: bytes | str
-    ) -> Optional[SubRecord]:
+    def find_subrecord(self, sig: bytes | str) -> Optional[SubRecord]:
         """
         Find the first sub-record matching the given 4-byte signature.
 
@@ -427,13 +426,9 @@ class Group:
             bool: ``True`` if the child is a :class:`Record`.
         """
 
-        return bool(
-            _ffi.load_lib().bethkit_group_child_is_record(self._ptr, index)
-        )
+        return bool(_ffi.load_lib().bethkit_group_child_is_record(self._ptr, index))
 
-    def child_as_record(
-        self, index: int
-    ) -> Optional[Record]:
+    def child_as_record(self, index: int) -> Optional[Record]:
         """
         Return the child at *index* as a :class:`Record`.
 
@@ -451,9 +446,7 @@ class Group:
             return None
         return Record(ptr, self)
 
-    def child_as_group(
-        self, index: int
-    ) -> Optional[Group]:
+    def child_as_group(self, index: int) -> Optional[Group]:
         """
         Return the child at *index* as a :class:`Group`.
 
@@ -504,12 +497,9 @@ class Group:
         """
 
         try:
-            return (
-                f"<Group type={self.group_type} children={self.child_count}>"
-            )
+            return f"<Group type={self.group_type} children={self.child_count}>"
         except BethkitNativeError:
             return "<Group ?>"
-
 
 
 class Plugin:
@@ -664,9 +654,7 @@ class Plugin:
             BethkitClosedError: If the plugin has been closed.
         """
 
-        return PluginKind(_ffi.load_lib().bethkit_plugin_kind(
-            self.__check_open()
-        ))
+        return PluginKind(_ffi.load_lib().bethkit_plugin_kind(self.__check_open()))
 
     @property
     def is_localized(self) -> bool:
@@ -680,9 +668,7 @@ class Plugin:
             BethkitClosedError: If the plugin has been closed.
         """
 
-        return bool(_ffi.load_lib().bethkit_plugin_is_localized(
-            self.__check_open()
-        ))
+        return bool(_ffi.load_lib().bethkit_plugin_is_localized(self.__check_open()))
 
     @property
     def description(self) -> Optional[str]:
@@ -697,9 +683,7 @@ class Plugin:
         """
 
         lib = _ffi.load_lib()
-        raw: Optional[bytes] = lib.bethkit_plugin_description(
-            self.__check_open()
-        )
+        raw: Optional[bytes] = lib.bethkit_plugin_description(self.__check_open())
         return raw.decode("utf-8") if raw else None
 
     @property
@@ -714,9 +698,7 @@ class Plugin:
             BethkitClosedError: If the plugin has been closed.
         """
 
-        return _ffi.load_lib().bethkit_plugin_master_count(
-            self.__check_open()
-        )
+        return _ffi.load_lib().bethkit_plugin_master_count(self.__check_open())
 
     def master_at(self, index: int) -> str:
         """
@@ -734,9 +716,7 @@ class Plugin:
         """
 
         lib = _ffi.load_lib()
-        raw: Optional[bytes] = lib.bethkit_plugin_master_get(
-            self.__check_open(), index
-        )
+        raw: Optional[bytes] = lib.bethkit_plugin_master_get(self.__check_open(), index)
         if raw is None:
             _ffi.raise_last_error(lib)
         return raw.decode("utf-8")  # type: ignore[union-attr]
@@ -767,9 +747,7 @@ class Plugin:
             BethkitClosedError: If the plugin has been closed.
         """
 
-        return _ffi.load_lib().bethkit_plugin_group_count(
-            self.__check_open()
-        )
+        return _ffi.load_lib().bethkit_plugin_group_count(self.__check_open())
 
     def group_at(self, index: int) -> Group:
         """

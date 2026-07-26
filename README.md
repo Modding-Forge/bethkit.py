@@ -10,7 +10,9 @@ Python bindings for [bethkit](https://github.com/Modding-Forge/bethkit) - a fast
 - **Plugin writing** - build new plugins from scratch with `PluginWriter`, `WritableGroup`, and `WritableRecord`
 - **BSA / BA2 archives** - open and extract entries from BSA (TES4/SSE) and BA2 (GNRL/DX10) archives; write new archives with `BsaWriter`, `Ba2GnrlWriter`, and `Ba2Dx10Writer`
 - **String tables** - read, edit, and write `.STRINGS`/`.DLSTRINGS`/`.ILSTRINGS` localisation files; apply translation sets with `LocalizationSet`
-- **Schema** - decode sub-records into typed `FieldValue` variants (integers, floats, FormIDs, enums with resolved names, flags, structs, arrays) via `RecordView` and `SchemaRegistry`
+- **Semantic schemas** - load embedded or external `.bkschema` packages through
+  `SchemaCatalog`, create a `SemanticContext`, and decode records into typed
+  immutable snapshots.
 - **Load-order utilities** - `LoadOrder`, `GlobalFormId`, and `PluginCache` for winning-override lookups and EditorID search across multiple plugins
 
 ## Requirements

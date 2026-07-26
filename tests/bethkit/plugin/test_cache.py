@@ -1,6 +1,7 @@
 """
 Copyright (c) Modding Forge
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -26,9 +27,7 @@ if TYPE_CHECKING:
 class TestPluginCache:
     """Tests ``bethkit.plugin.cache.PluginCache``."""
 
-    def test_constructor_calls_cache_new(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_constructor_calls_cache_new(self, mocker: MockerFixture) -> None:
         """Tests that __init__ calls bethkit_plugin_cache_new."""
 
         # given
@@ -43,9 +42,7 @@ class TestPluginCache:
         mock_lib.bethkit_plugin_cache_new.assert_called_once()
         cache.close()
 
-    def test_context_manager_frees_on_exit(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_context_manager_frees_on_exit(self, mocker: MockerFixture) -> None:
         """Tests that __exit__ calls bethkit_plugin_cache_free."""
 
         # given
@@ -76,9 +73,7 @@ class TestPluginCache:
         # then
         mock_lib.bethkit_plugin_cache_free.assert_called_once()
 
-    def test_record_count_raises_after_close(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_record_count_raises_after_close(self, mocker: MockerFixture) -> None:
         """Tests that record_count raises BethkitClosedError after close()."""
 
         # given
@@ -92,9 +87,7 @@ class TestPluginCache:
         with pytest.raises(BethkitClosedError):
             _ = cache.record_count
 
-    def test_add_transfers_plugin_ownership(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_add_transfers_plugin_ownership(self, mocker: MockerFixture) -> None:
         """Tests that add() transfers Plugin ownership; plugin becomes invalid."""
 
         # given
@@ -114,9 +107,7 @@ class TestPluginCache:
         with pytest.raises(BethkitClosedError):
             _ = plugin.kind
 
-    def test_add_raises_type_error_for_non_plugin(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_add_raises_type_error_for_non_plugin(self, mocker: MockerFixture) -> None:
         """Tests that add() raises TypeError when given a non-Plugin object."""
 
         # given
@@ -205,9 +196,7 @@ class TestPluginCache:
         # then
         assert result is None
 
-    def test_find_by_editor_id_returns_cache_hit(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_find_by_editor_id_returns_cache_hit(self, mocker: MockerFixture) -> None:
         """Tests that find_by_editor_id() returns a CacheHit with a Record."""
 
         # given

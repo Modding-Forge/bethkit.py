@@ -1,6 +1,7 @@
 """
 Copyright (c) Modding Forge
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -80,9 +81,7 @@ class LoadOrder:
         """
 
         if not self.__ptr:
-            raise BethkitClosedError(
-                "LoadOrder has already been closed."
-            )
+            raise BethkitClosedError("LoadOrder has already been closed.")
         return self.__ptr
 
     def close(self) -> None:
@@ -135,9 +134,7 @@ class LoadOrder:
 
         lib = _ffi.load_lib()
         ptr = self.__check_open()
-        if lib.bethkit_load_order_push(
-            ptr, _ffi.senc(name), int(kind)
-        ) != 0:
+        if lib.bethkit_load_order_push(ptr, _ffi.senc(name), int(kind)) != 0:
             _ffi.raise_last_error(lib)
 
     def __len__(self) -> int:

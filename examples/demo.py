@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from bethkit import Game, Plugin, RecordView, SchemaRegistry
+from bethkit import Game, Plugin, SchemaCatalog, SemanticContext
 from bethkit.plugin.plugin import Group, Record
 
 
@@ -74,23 +74,28 @@ def print_records(plugin: Plugin, limit: int = 20) -> None:
 
 def demo_schema(plugin: Plugin) -> None:
     """
-    Find the first NPC_ record and decode it via the SSE schema registry.
+    Find the first NPC_ record and decode it via the embedded SSE package.
 
     Args:
         plugin (Plugin): The loaded plugin.
     """
-    registry = SchemaRegistry.sse()
-    for group in plugin:
-        for record in _iter_records(group):
-            if record.signature == b"NPC_" and registry.has(b"NPC_"):
-                with RecordView.new(record, b"NPC_") as view:
-                    print(
-                        f"Schema view for NPC_ 0x{record.form_id:08X}"
-                        f" ({record.editor_id or 'no EditorID'}):"
-                    )
-                    for field in view.fields():
-                        print(f"  {field.name:20s} = {field.value}")
-                return
+    with SchemaCatalog.embedded() as catalog:
+        with catalog.package(Game.SKYRIM_SE) as package:
+            with SemanticContext(package) as context:
+                for group in plugin:
+                    for record in _iter_records(group):
+                        if record.signature == b"NPC_":
+                            with context.view(
+                                record,
+                                localized=plugin.is_localized(),
+                            ) as view:
+                                print(
+                                    f"Schema view for NPC_ 0x{record.form_id:08X}"
+                                    f" ({record.editor_id or 'no EditorID'}):"
+                                )
+                                for field in view.fields():
+                                    print(f"  {field.name:20s} = {field.value}")
+                            return
     print("No NPC_ record found in plugin.")
 
 

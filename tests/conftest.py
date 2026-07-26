@@ -11,6 +11,7 @@ Binary layout (SSE / Skyrim Special Edition plugin format):
               + version_control(4) + unknown(4) + children
   HEDR    = f32(version) + u32(num_records) + u32(next_object_id)  [12 B]
 """
+
 from __future__ import annotations
 
 import io
@@ -28,9 +29,7 @@ import pytest
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
-_GITHUB_API = (
-    "https://api.github.com/repos/Modding-Forge/bethkit/releases/latest"
-)
+_GITHUB_API = "https://api.github.com/repos/Modding-Forge/bethkit/releases/latest"
 _GITHUB_HEADERS: dict[str, str] = {
     "Accept": "application/vnd.github+json",
     "User-Agent": "bethkit.py/tests",
@@ -149,9 +148,7 @@ def pytest_collection_modifyitems(
     if _lib_available:
         return
 
-    skip_marker = pytest.mark.skip(
-        reason="bethkit_ffi native library not available"
-    )
+    skip_marker = pytest.mark.skip(reason="bethkit_ffi native library not available")
     for item in items:
         if item.get_closest_marker("integration"):
             item.add_marker(skip_marker)
@@ -279,9 +276,7 @@ def build_minimal_plugin(
     tes4_body = build_subrecord(b"HEDR", hedr_data)
 
     for master_name in masters or []:
-        tes4_body += build_subrecord(
-            b"MAST", master_name.encode("utf-8") + b"\x00"
-        )
+        tes4_body += build_subrecord(b"MAST", master_name.encode("utf-8") + b"\x00")
         tes4_body += build_subrecord(b"DATA", struct.pack("<Q", 0))
 
     tes4_rec = build_record(b"TES4", 0, 0, tes4_body)

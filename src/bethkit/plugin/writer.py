@@ -1,6 +1,7 @@
 """
 Copyright (c) Modding Forge
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -13,10 +14,16 @@ from ..enums import Game
 
 _HEDR_VERSION: dict[Game, float] = {
     Game.SKYRIM_SE: 1.7,
+    Game.SKYRIM_VR: 1.7,
     Game.FALLOUT4: 0.95,
-    Game.SKYRIM: 0.94,
+    Game.FALLOUT4_VR: 0.95,
+    Game.SKYRIM_LE: 0.94,
     Game.FALLOUT3: 0.94,
     Game.FALLOUT_NV: 0.94,
+    Game.OBLIVION: 0.8,
+    Game.MORROWIND: 1.3,
+    Game.FALLOUT76: 1.0,
+    Game.STARFIELD: 1.0,
 }
 
 
@@ -130,9 +137,7 @@ class WritableRecord:
 
         buf = _sig_buf(signature)
         lib = _ffi.load_lib()
-        ptr = lib.bethkit_writable_record_new(
-            buf, flags, form_id, form_version
-        )
+        ptr = lib.bethkit_writable_record_new(buf, flags, form_id, form_version)
         if not ptr:
             _ffi.raise_last_error(lib)
         return cls(ptr)
@@ -166,9 +171,7 @@ class WritableRecord:
         except Exception:
             pass
 
-    def add_subrecord(
-        self, signature: bytes | str, data: bytes
-    ) -> None:
+    def add_subrecord(self, signature: bytes | str, data: bytes) -> None:
         """
         Append a sub-record to this record.
 
@@ -260,9 +263,7 @@ class WritableGroup:
         return ptr
 
     @classmethod
-    def new(
-        cls, label: bytes | str, group_type: int = 0
-    ) -> WritableGroup:
+    def new(cls, label: bytes | str, group_type: int = 0) -> WritableGroup:
         """
         Create a new writable group.
 
@@ -334,9 +335,7 @@ class WritableGroup:
 
         lib = _ffi.load_lib()
         rec_ptr = record._transfer_ptr()
-        if lib.bethkit_writable_group_add_record(
-            self.__check_open(), rec_ptr
-        ) != 0:
+        if lib.bethkit_writable_group_add_record(self.__check_open(), rec_ptr) != 0:
             _ffi.raise_last_error(lib)
 
     def add_group(self, child: WritableGroup) -> None:
@@ -357,9 +356,7 @@ class WritableGroup:
 
         lib = _ffi.load_lib()
         child_ptr = child._transfer_ptr()
-        if lib.bethkit_writable_group_add_group(
-            self.__check_open(), child_ptr
-        ) != 0:
+        if lib.bethkit_writable_group_add_group(self.__check_open(), child_ptr) != 0:
             _ffi.raise_last_error(lib)
 
     def __repr__(self) -> str:
@@ -468,9 +465,7 @@ class PluginWriter:
 
         lib = _ffi.load_lib()
         grp_ptr = group._transfer_ptr()
-        if lib.bethkit_plugin_writer_add_group(
-            self.__check_open(), grp_ptr
-        ) != 0:
+        if lib.bethkit_plugin_writer_add_group(self.__check_open(), grp_ptr) != 0:
             _ffi.raise_last_error(lib)
 
     def write_to_file(self, path: Path) -> None:
@@ -486,9 +481,10 @@ class PluginWriter:
         """
 
         lib = _ffi.load_lib()
-        if lib.bethkit_plugin_writer_write_to_file(
-            self.__check_open(), _ffi.enc(path)
-        ) != 0:
+        if (
+            lib.bethkit_plugin_writer_write_to_file(self.__check_open(), _ffi.enc(path))
+            != 0
+        ):
             _ffi.raise_last_error(lib)
 
     def write_to_bytes(self) -> bytes:

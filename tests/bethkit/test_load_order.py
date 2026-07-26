@@ -1,6 +1,7 @@
 """
 Copyright (c) Modding Forge
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -78,9 +79,7 @@ class TestGlobalFormId:
 class TestLoadOrder:
     """Tests ``bethkit.load_order.LoadOrder``."""
 
-    def test_constructor_creates_handle(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_constructor_creates_handle(self, mocker: MockerFixture) -> None:
         """Tests that LoadOrder() calls bethkit_load_order_new."""
 
         # given
@@ -126,9 +125,7 @@ class TestLoadOrder:
         # then
         mock_lib.bethkit_load_order_free.assert_called_once()
 
-    def test_context_manager_closes_on_exit(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_context_manager_closes_on_exit(self, mocker: MockerFixture) -> None:
         """Tests that __exit__ calls close()."""
 
         # given
@@ -143,9 +140,7 @@ class TestLoadOrder:
         # then
         mock_lib.bethkit_load_order_free.assert_called_once()
 
-    def test_push_calls_native_function(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_push_calls_native_function(self, mocker: MockerFixture) -> None:
         """Tests that push() delegates to bethkit_load_order_push."""
 
         # given
@@ -161,9 +156,7 @@ class TestLoadOrder:
         # then
         mock_lib.bethkit_load_order_push.assert_called_once()
 
-    def test_closed_handle_raises_on_push(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_closed_handle_raises_on_push(self, mocker: MockerFixture) -> None:
         """Tests that push() raises BethkitClosedError after close()."""
 
         # given
@@ -207,9 +200,7 @@ class TestLoadOrder:
         with pytest.raises(BethkitClosedError):
             _ = len(lo)
 
-    def test_resolve_returns_global_form_id(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_resolve_returns_global_form_id(self, mocker: MockerFixture) -> None:
         """Tests that resolve() wraps the native result in a GlobalFormId."""
 
         # given
@@ -220,9 +211,7 @@ class TestLoadOrder:
         out_struct: MagicMock = mocker.MagicMock()
         out_struct.plugin_name = b"Skyrim.esm"
         out_struct.object_id = 0x12E49
-        mocker.patch(
-            "bethkit.load_order.BethkitGlobalFormId", return_value=out_struct
-        )
+        mocker.patch("bethkit.load_order.BethkitGlobalFormId", return_value=out_struct)
         mocker.patch("bethkit.load_order.ctypes.byref", return_value=out_struct)
         mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
 
@@ -235,9 +224,7 @@ class TestLoadOrder:
         assert gfid.plugin_name == "Skyrim.esm"
         assert gfid.object_id == 0x12E49
 
-    def test_repr_shows_closed_when_closed(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_repr_shows_closed_when_closed(self, mocker: MockerFixture) -> None:
         """Tests that __repr__() returns '<LoadOrder closed>' after close()."""
 
         # given

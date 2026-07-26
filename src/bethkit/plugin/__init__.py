@@ -3,6 +3,7 @@ Copyright (c) Modding Forge
 
 Plugin subpackage — reading, writing, and caching Bethesda plugin files.
 """
+
 from __future__ import annotations
 
 from .cache import CacheHit, PluginCache

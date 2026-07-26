@@ -1,6 +1,7 @@
 """
 Copyright (c) Modding Forge
 """
+
 from __future__ import annotations
 
 from enum import IntEnum
@@ -14,20 +15,41 @@ class Game(IntEnum):
     plugin and archive format for a given game.
     """
 
-    SKYRIM_SE = 0
+    SKYRIM_LE = 0
+    """The Elder Scrolls V: Skyrim Legendary Edition."""
+
+    SKYRIM_SE = 1
     """Skyrim Special Edition (64-bit, AE/SE)."""
 
-    FALLOUT4 = 1
-    """Fallout 4."""
-
-    SKYRIM = 2
-    """The Elder Scrolls V: Skyrim (Classic, 32-bit)."""
+    SKYRIM_VR = 2
+    """The Elder Scrolls V: Skyrim VR."""
 
     FALLOUT3 = 3
     """Fallout 3."""
 
     FALLOUT_NV = 4
     """Fallout: New Vegas."""
+
+    FALLOUT4 = 5
+    """Fallout 4."""
+
+    FALLOUT4_VR = 6
+    """Fallout 4 VR."""
+
+    FALLOUT76 = 7
+    """Fallout 76."""
+
+    OBLIVION = 8
+    """The Elder Scrolls IV: Oblivion."""
+
+    MORROWIND = 9
+    """The Elder Scrolls III: Morrowind."""
+
+    STARFIELD = 10
+    """Starfield."""
+
+    SKYRIM = SKYRIM_LE
+    """Deprecated compatibility alias for Skyrim Legendary Edition."""
 
 
 class PluginKind(IntEnum):
@@ -131,9 +153,8 @@ class FieldValueKind(IntEnum):
     ARRAY = 9
     """Repeated field, decoded as ``list[FieldValue]``."""
 
-    LOCALIZED_ID = 10
-    """Localisation string ID, decoded as ``int``."""
-
-    MISSING = 11
+    MISSING = 10
     """Field absent or unknown; value is ``None``."""
 
+    UINT = 11
+    """Unsigned 64-bit integer field, decoded as ``int``."""

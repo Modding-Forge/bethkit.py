@@ -1,6 +1,7 @@
 """
 Copyright (c) Modding Forge
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -45,9 +46,7 @@ class TestArchive:
         assert isinstance(archive, Archive)
         archive.close()
 
-    def test_open_raises_on_null_ptr(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
+    def test_open_raises_on_null_ptr(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Tests that Archive.open() raises BethkitNativeError when FFI returns 0."""
 
         # given
@@ -77,9 +76,7 @@ class TestArchive:
         # then
         mock_lib.bethkit_archive_free.assert_called_once_with(0xDEAD)
 
-    def test_close_is_idempotent(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
+    def test_close_is_idempotent(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Tests that close() called twice does not double-free."""
 
         # given
@@ -301,9 +298,7 @@ class TestBsaWriter:
         assert isinstance(writer, BsaWriter)
         writer.close()
 
-    def test_context_manager_frees_on_exit(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_context_manager_frees_on_exit(self, mocker: MockerFixture) -> None:
         """Tests that __exit__ calls bethkit_bsa_writer_free."""
 
         # given
@@ -334,9 +329,7 @@ class TestBsaWriter:
         # then
         mock_lib.bethkit_bsa_writer_free.assert_called_once()
 
-    def test_closed_writer_raises_on_add(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_closed_writer_raises_on_add(self, mocker: MockerFixture) -> None:
         """Tests that add() raises BethkitClosedError after close()."""
 
         # given
@@ -394,14 +387,12 @@ class TestBsaWriter:
 
         # when
         with BsaWriter(BsaVersion.SSE) as writer:
-            writer.add("meshes/foo.nif", b"\xDE\xAD\xBE\xEF")
+            writer.add("meshes/foo.nif", b"\xde\xad\xbe\xef")
 
         # then
         mock_lib.bethkit_bsa_writer_add.assert_called_once()
 
-    def test_write_to_calls_native(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
+    def test_write_to_calls_native(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Tests that write_to() delegates to bethkit_bsa_writer_write_to."""
 
         # given
@@ -436,9 +427,7 @@ class TestBa2GnrlWriter:
         assert isinstance(writer, Ba2GnrlWriter)
         writer.close()
 
-    def test_context_manager_frees_on_exit(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_context_manager_frees_on_exit(self, mocker: MockerFixture) -> None:
         """Tests that __exit__ calls bethkit_ba2_gnrl_writer_free."""
 
         # given
@@ -453,9 +442,7 @@ class TestBa2GnrlWriter:
         # then
         mock_lib.bethkit_ba2_gnrl_writer_free.assert_called_once_with(0xDDDD)
 
-    def test_closed_writer_raises_on_add(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_closed_writer_raises_on_add(self, mocker: MockerFixture) -> None:
         """Tests that add() raises BethkitClosedError after close()."""
 
         # given
@@ -480,14 +467,12 @@ class TestBa2GnrlWriter:
 
         # when
         with Ba2GnrlWriter(Ba2Version.V1) as writer:
-            writer.add("sound/fx/boom.wav", b"\xFF" * 8)
+            writer.add("sound/fx/boom.wav", b"\xff" * 8)
 
         # then
         mock_lib.bethkit_ba2_gnrl_writer_add.assert_called_once()
 
-    def test_write_to_calls_native(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
+    def test_write_to_calls_native(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Tests that write_to() delegates to bethkit_ba2_gnrl_writer_write_to."""
 
         # given

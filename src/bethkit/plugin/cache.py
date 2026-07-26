@@ -1,6 +1,7 @@
 """
 Copyright (c) Modding Forge
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -141,9 +142,7 @@ class PluginCache:
             raise BethkitOwnershipError(
                 "Plugin handle has already been transferred or closed."
             )
-        if lib.bethkit_plugin_cache_add(
-            ptr, _ffi.senc(name), plugin_ptr
-        ) != 0:
+        if lib.bethkit_plugin_cache_add(ptr, _ffi.senc(name), plugin_ptr) != 0:
             _ffi.raise_last_error(lib)
 
     def __len__(self) -> int:
@@ -171,13 +170,9 @@ class PluginCache:
             BethkitClosedError: If this cache has already been closed.
         """
 
-        return _ffi.load_lib().bethkit_plugin_cache_record_count(
-            self.__check_open()
-        )
+        return _ffi.load_lib().bethkit_plugin_cache_record_count(self.__check_open())
 
-    def resolve(
-        self, plugin_name: str, object_id: int
-    ) -> Optional[object]:
+    def resolve(self, plugin_name: str, object_id: int) -> Optional[object]:
         """
         Look up a record by its global FormID components.
 
@@ -229,9 +224,7 @@ class PluginCache:
         if not ptr_val:
             return None
         plugin_name_raw: Optional[bytes] = out.plugin_name
-        plugin_name = (
-            plugin_name_raw.decode("utf-8") if plugin_name_raw else ""
-        )
+        plugin_name = plugin_name_raw.decode("utf-8") if plugin_name_raw else ""
         gfid = GlobalFormId(plugin_name=plugin_name, object_id=out.object_id)
         return CacheHit(record=Record(ptr_val, self), global_form_id=gfid)
 
@@ -244,8 +237,4 @@ class PluginCache:
 
         if not self.__ptr:
             return "<PluginCache closed>"
-        return (
-            f"<PluginCache plugins={len(self)} records={self.record_count}>"
-        )
-
-
+        return f"<PluginCache plugins={len(self)} records={self.record_count}>"

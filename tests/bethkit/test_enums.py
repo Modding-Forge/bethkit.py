@@ -1,6 +1,7 @@
 """
 Copyright (c) Modding Forge
 """
+
 from __future__ import annotations
 
 from bethkit import (
@@ -128,10 +129,10 @@ class TestFieldValueKind:
 
         assert FieldValueKind.FLOAT == 1
 
-    def test_missing_is_eleven(self) -> None:
-        """Tests that FieldValueKind.MISSING has integer value 11."""
+    def test_missing_is_ten(self) -> None:
+        """Tests that FieldValueKind.MISSING has integer value 10."""
 
-        assert FieldValueKind.MISSING == 11
+        assert FieldValueKind.MISSING == 10
 
     def test_roundtrip_from_int(self) -> None:
         """Tests that FieldValueKind can be constructed from its integer value."""

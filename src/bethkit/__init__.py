@@ -20,6 +20,7 @@ Quick example::
                 if hasattr(child, "form_id"):
                     print(f"0x{child.form_id:08X}", child.editor_id)
 """
+
 from __future__ import annotations
 
 from ._error import (
@@ -51,7 +52,21 @@ from .plugin import (
     WritableGroup,
     WritableRecord,
 )
-from .schema import EnumVal, FlagsVal, NamedField, RecordView, SchemaRegistry, TypedFormId
+from .schema import (
+    Conflict,
+    DecoderRequirement,
+    Diagnostic,
+    EnumVal,
+    FlagsVal,
+    NamedField,
+    RecordView,
+    ReferenceEdge,
+    SchemaCatalog,
+    SchemaManifest,
+    SchemaPackage,
+    SemanticContext,
+    TypedFormId,
+)
 from .strings import LocalizationSet, StringTable
 
 __all__ = [
@@ -81,12 +96,19 @@ __all__ = [
     "Ba2GnrlWriter",
     "Ba2Dx10Writer",
     # Schema
-    "SchemaRegistry",
+    "SchemaCatalog",
+    "SchemaPackage",
+    "SchemaManifest",
+    "SemanticContext",
     "RecordView",
     "NamedField",
     "TypedFormId",
     "EnumVal",
     "FlagsVal",
+    "DecoderRequirement",
+    "Diagnostic",
+    "Conflict",
+    "ReferenceEdge",
     # Load order & cache
     "LoadOrder",
     "GlobalFormId",

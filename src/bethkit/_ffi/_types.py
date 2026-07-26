@@ -1,4 +1,5 @@
 """ctypes Structure and Union definitions mirroring bethkit.h."""
+
 from __future__ import annotations
 
 import ctypes
@@ -61,6 +62,7 @@ class BethkitFieldValuePayload(ctypes.Union):
 
     _fields_ = [
         ("int_val", ctypes.c_int64),
+        ("uint_val", ctypes.c_uint64),
         ("float_val", ctypes.c_double),
         # Borrowed from the owning view; never free.
         ("str_val", ctypes.c_char_p),
@@ -73,7 +75,6 @@ class BethkitFieldValuePayload(ctypes.Union):
         ("struct_entries", ctypes.c_void_p),
         # Owned; freed with bethkit_field_values_free (or via view free).
         ("array_values", ctypes.c_void_p),
-        ("localized_id", ctypes.c_uint32),
         ("_pad", ctypes.c_uint64),
     ]
 

@@ -1,6 +1,7 @@
 """
 Copyright (c) Modding Forge
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -61,9 +62,7 @@ class ArchiveEntry:
         ptr = lib.bethkit_archive_entry_path(self._ptr)
         if not ptr:
             return ""
-        return _ffi.copy_and_free_str(
-            ptr, lib.bethkit_archive_entry_path_free, lib
-        )
+        return _ffi.copy_and_free_str(ptr, lib.bethkit_archive_entry_path_free, lib)
 
     @property
     def uncompressed_size(self) -> int:
@@ -74,9 +73,7 @@ class ArchiveEntry:
             int: Byte count of the decompressed content.
         """
 
-        return _ffi.load_lib().bethkit_archive_entry_uncompressed_size(
-            self._ptr
-        )
+        return _ffi.load_lib().bethkit_archive_entry_uncompressed_size(self._ptr)
 
     def __repr__(self) -> str:
         """
@@ -187,9 +184,7 @@ class Archive:
         """
 
         lib = _ffi.load_lib()
-        raw: Optional[bytes] = lib.bethkit_archive_format_name(
-            self.__check_open()
-        )
+        raw: Optional[bytes] = lib.bethkit_archive_format_name(self.__check_open())
         return raw.decode("utf-8") if raw else ""
 
     @property
@@ -204,9 +199,7 @@ class Archive:
             BethkitClosedError: If the archive has been closed.
         """
 
-        return _ffi.load_lib().bethkit_archive_file_count(
-            self.__check_open()
-        )
+        return _ffi.load_lib().bethkit_archive_file_count(self.__check_open())
 
     def entry_at(self, index: int) -> ArchiveEntry:
         """
@@ -323,9 +316,7 @@ class Archive:
 
         if not self.__ptr:
             return "<Archive closed>"
-        return (
-            f"<Archive format={self.format_name!r} files={self.file_count}>"
-        )
+        return f"<Archive format={self.format_name!r} files={self.file_count}>"
 
 
 class BsaWriter:
@@ -415,9 +406,7 @@ class BsaWriter:
         """
 
         lib = _ffi.load_lib()
-        if lib.bethkit_bsa_writer_set_compress(
-            self.__check_open(), compress
-        ) != 0:
+        if lib.bethkit_bsa_writer_set_compress(self.__check_open(), compress) != 0:
             _ffi.raise_last_error(lib)
 
     def set_embed_names(self, embed: bool) -> None:
@@ -433,9 +422,7 @@ class BsaWriter:
         """
 
         lib = _ffi.load_lib()
-        if lib.bethkit_bsa_writer_set_embed_names(
-            self.__check_open(), embed
-        ) != 0:
+        if lib.bethkit_bsa_writer_set_embed_names(self.__check_open(), embed) != 0:
             _ffi.raise_last_error(lib)
 
     def add(self, path: str, data: bytes) -> None:
@@ -454,9 +441,12 @@ class BsaWriter:
 
         lib = _ffi.load_lib()
         buf = _buf_from_bytes(data)
-        if lib.bethkit_bsa_writer_add(
-            self.__check_open(), _ffi.senc(path), buf, len(data)
-        ) != 0:
+        if (
+            lib.bethkit_bsa_writer_add(
+                self.__check_open(), _ffi.senc(path), buf, len(data)
+            )
+            != 0
+        ):
             _ffi.raise_last_error(lib)
 
     def write_to(self, dest: Path) -> None:
@@ -472,9 +462,7 @@ class BsaWriter:
         """
 
         lib = _ffi.load_lib()
-        if lib.bethkit_bsa_writer_write_to(
-            self.__check_open(), _ffi.enc(dest)
-        ) != 0:
+        if lib.bethkit_bsa_writer_write_to(self.__check_open(), _ffi.enc(dest)) != 0:
             _ffi.raise_last_error(lib)
 
 
@@ -562,9 +550,12 @@ class Ba2GnrlWriter:
 
         lib = _ffi.load_lib()
         buf = _buf_from_bytes(data)
-        if lib.bethkit_ba2_gnrl_writer_add(
-            self.__check_open(), _ffi.senc(path), buf, len(data)
-        ) != 0:
+        if (
+            lib.bethkit_ba2_gnrl_writer_add(
+                self.__check_open(), _ffi.senc(path), buf, len(data)
+            )
+            != 0
+        ):
             _ffi.raise_last_error(lib)
 
     def write_to(self, dest: Path) -> None:
@@ -580,9 +571,7 @@ class Ba2GnrlWriter:
         """
 
         lib = _ffi.load_lib()
-        if lib.bethkit_ba2_gnrl_writer_write_to(
-            self.__check_open(), _ffi.enc(dest)
-        ) != 0:
+        if lib.bethkit_ba2_gnrl_writer_write_to(self.__check_open(), _ffi.enc(dest)) != 0:
             _ffi.raise_last_error(lib)
 
 
@@ -670,9 +659,12 @@ class Ba2Dx10Writer:
 
         lib = _ffi.load_lib()
         buf = _buf_from_bytes(data)
-        if lib.bethkit_ba2_dx10_writer_add(
-            self.__check_open(), _ffi.senc(path), buf, len(data)
-        ) != 0:
+        if (
+            lib.bethkit_ba2_dx10_writer_add(
+                self.__check_open(), _ffi.senc(path), buf, len(data)
+            )
+            != 0
+        ):
             _ffi.raise_last_error(lib)
 
     def write_to(self, dest: Path) -> None:
@@ -688,7 +680,5 @@ class Ba2Dx10Writer:
         """
 
         lib = _ffi.load_lib()
-        if lib.bethkit_ba2_dx10_writer_write_to(
-            self.__check_open(), _ffi.enc(dest)
-        ) != 0:
+        if lib.bethkit_ba2_dx10_writer_write_to(self.__check_open(), _ffi.enc(dest)) != 0:
             _ffi.raise_last_error(lib)

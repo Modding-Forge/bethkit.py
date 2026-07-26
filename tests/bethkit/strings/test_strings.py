@@ -1,6 +1,7 @@
 """
 Copyright (c) Modding Forge
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -52,9 +53,7 @@ class TestStringTable:
         with pytest.raises(BethkitNativeError):
             StringTable.new(StringFileKind.STRINGS)
 
-    def test_open_returns_table(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
+    def test_open_returns_table(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Tests that StringTable.open() wraps a non-null FFI pointer."""
 
         # given
@@ -69,9 +68,7 @@ class TestStringTable:
         assert isinstance(table, StringTable)
         table.close()
 
-    def test_open_raises_on_null_ptr(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
+    def test_open_raises_on_null_ptr(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Tests that open() raises BethkitNativeError when FFI returns 0."""
 
         # given
@@ -84,9 +81,7 @@ class TestStringTable:
         with pytest.raises(BethkitNativeError):
             StringTable.open(tmp_path / "missing.strings")
 
-    def test_context_manager_frees_on_exit(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_context_manager_frees_on_exit(self, mocker: MockerFixture) -> None:
         """Tests that __exit__ calls bethkit_string_table_free."""
 
         # given
@@ -117,9 +112,7 @@ class TestStringTable:
         # then
         mock_lib.bethkit_string_table_free.assert_called_once()
 
-    def test_get_returns_none_for_missing_id(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_get_returns_none_for_missing_id(self, mocker: MockerFixture) -> None:
         """Tests that get() returns None when FFI returns a null pointer."""
 
         # given
@@ -135,9 +128,7 @@ class TestStringTable:
         # then
         assert result is None
 
-    def test_get_returns_bytes_for_known_id(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_get_returns_bytes_for_known_id(self, mocker: MockerFixture) -> None:
         """Tests that get() returns raw bytes when FFI returns a valid pointer."""
 
         # given
@@ -146,9 +137,7 @@ class TestStringTable:
         fake_ptr = 0xBEEF
         payload = b"Hello World\x00"
         mock_lib.bethkit_string_table_get.return_value = fake_ptr
-        mocker.patch(
-            "ctypes.string_at", return_value=payload
-        )
+        mocker.patch("ctypes.string_at", return_value=payload)
         mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
 
         # when
@@ -158,18 +147,14 @@ class TestStringTable:
         # then
         assert result == payload
 
-    def test_get_str_strips_null_and_decodes(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_get_str_strips_null_and_decodes(self, mocker: MockerFixture) -> None:
         """Tests that get_str() strips trailing null and decodes as UTF-8."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
         mock_lib.bethkit_string_table_new.return_value = 0xAAAA
         mock_lib.bethkit_string_table_get.return_value = 0xBEEF
-        mocker.patch(
-            "ctypes.string_at", return_value=b"Iron Sword\x00"
-        )
+        mocker.patch("ctypes.string_at", return_value=b"Iron Sword\x00")
         mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
 
         # when
@@ -179,9 +164,7 @@ class TestStringTable:
         # then
         assert result == "Iron Sword"
 
-    def test_get_str_returns_none_for_missing_id(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_get_str_returns_none_for_missing_id(self, mocker: MockerFixture) -> None:
         """Tests that get_str() returns None for an absent string ID."""
 
         # given
@@ -197,9 +180,7 @@ class TestStringTable:
         # then
         assert result is None
 
-    def test_closed_table_raises_on_get(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_closed_table_raises_on_get(self, mocker: MockerFixture) -> None:
         """Tests that get() raises BethkitClosedError after close()."""
 
         # given
@@ -229,9 +210,7 @@ class TestStringTable:
         # then
         mock_lib.bethkit_string_table_insert.assert_called_once()
 
-    def test_remove_returns_true_when_found(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_remove_returns_true_when_found(self, mocker: MockerFixture) -> None:
         """Tests that remove() returns True when the FFI reports the entry existed."""
 
         # given
@@ -247,9 +226,7 @@ class TestStringTable:
         # then
         assert result is True
 
-    def test_remove_returns_false_when_absent(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_remove_returns_false_when_absent(self, mocker: MockerFixture) -> None:
         """Tests that remove() returns False when the FFI reports the entry was absent."""
 
         # given
@@ -265,17 +242,13 @@ class TestStringTable:
         # then
         assert result is False
 
-    def test_kind_returns_string_file_kind(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_kind_returns_string_file_kind(self, mocker: MockerFixture) -> None:
         """Tests that kind delegates to bethkit_string_table_kind."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
         mock_lib.bethkit_string_table_new.return_value = 0xAAAA
-        mock_lib.bethkit_string_table_kind.return_value = int(
-            StringFileKind.DL_STRINGS
-        )
+        mock_lib.bethkit_string_table_kind.return_value = int(StringFileKind.DL_STRINGS)
         mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
 
         # when
@@ -301,9 +274,7 @@ class TestStringTable:
         # then
         assert count == 7
 
-    def test_insert_new_returns_assigned_id(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_insert_new_returns_assigned_id(self, mocker: MockerFixture) -> None:
         """Tests that insert_new() returns the ID assigned by the native call."""
 
         # given
@@ -374,9 +345,7 @@ class TestLocalizationSet:
         assert isinstance(loc, LocalizationSet)
         loc.close()
 
-    def test_context_manager_frees_on_exit(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_context_manager_frees_on_exit(self, mocker: MockerFixture) -> None:
         """Tests that __exit__ calls bethkit_localization_set_free."""
 
         # given
@@ -389,9 +358,7 @@ class TestLocalizationSet:
             pass
 
         # then
-        mock_lib.bethkit_localization_set_free.assert_called_once_with(
-            0xBBBB
-        )
+        mock_lib.bethkit_localization_set_free.assert_called_once_with(0xBBBB)
 
     def test_close_is_idempotent(self, mocker: MockerFixture) -> None:
         """Tests that close() called twice does not double-free."""
@@ -409,9 +376,7 @@ class TestLocalizationSet:
         # then
         mock_lib.bethkit_localization_set_free.assert_called_once()
 
-    def test_closed_set_raises_on_get(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_closed_set_raises_on_get(self, mocker: MockerFixture) -> None:
         """Tests that get() raises BethkitClosedError after close()."""
 
         # given
@@ -425,9 +390,7 @@ class TestLocalizationSet:
         with pytest.raises(BethkitClosedError):
             loc.get(StringFileKind.STRINGS, 1)
 
-    def test_get_returns_none_for_missing_id(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_get_returns_none_for_missing_id(self, mocker: MockerFixture) -> None:
         """Tests that get() returns None when FFI returns a null pointer."""
 
         # given
@@ -443,9 +406,7 @@ class TestLocalizationSet:
         # then
         assert result is None
 
-    def test_get_returns_bytes_for_found_id(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_get_returns_bytes_for_found_id(self, mocker: MockerFixture) -> None:
         """Tests that get() returns raw bytes for a found string ID."""
 
         # given
@@ -463,9 +424,7 @@ class TestLocalizationSet:
         # then
         assert result == payload
 
-    def test_get_str_strips_null_and_decodes(
-        self, mocker: MockerFixture
-    ) -> None:
+    def test_get_str_strips_null_and_decodes(self, mocker: MockerFixture) -> None:
         """Tests that get_str() strips trailing null and decodes as UTF-8."""
 
         # given
@@ -498,9 +457,7 @@ class TestLocalizationSet:
         # then
         mock_lib.bethkit_localization_set_set.assert_called_once()
 
-    def test_write_calls_native(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
+    def test_write_calls_native(self, mocker: MockerFixture, tmp_path: Path) -> None:
         """Tests that write() delegates to bethkit_localization_set_write."""
 
         # given

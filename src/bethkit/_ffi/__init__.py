@@ -5,6 +5,7 @@ Internal FFI package — loads the native library and declares ctypes types.
 
 Not part of the public API; import from ``bethkit`` directly.
 """
+
 from __future__ import annotations
 
 from ._loader import (
