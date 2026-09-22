@@ -33,60 +33,40 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --extra dev
 
-      - name: Download bethkit native library
-        shell: bash
-        run: |
-          BROWSER_URL=$(curl -fsSL \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/Modding-Forge/bethkit/releases/latest \
-            | python3 -c "
-          import json, sys
-          data = json.load(sys.stdin)
-          suffix = '${{ matrix.zip-suffix }}'
-          for a in data.get('assets', []):
-              if a['name'].endswith(f'-{suffix}.zip'):
-                  print(a['browser_download_url'])
-                  break
-          ")
-          curl -fsSL -o native.zip "$BROWSER_URL"
-          unzip -j native.zip "${{ matrix.dll }}" -d src/bethkit/
-          # On Windows, $(pwd) returns a Unix-style path that PowerShell
-          # cannot resolve. cygpath converts it to a Windows path.
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            WIN_PATH=$(cygpath -w "$(pwd)/src/bethkit/${{ matrix.dll }}")
-            echo "BETHKIT_LIB=$WIN_PATH" >> "$GITHUB_ENV"
-          else
-            echo "BETHKIT_LIB=$(pwd)/src/bethkit/${{ matrix.dll }}" >> "$GITHUB_ENV"
-          fi
+      - name: Require an explicitly pinned published native release
+        run: uv run python scripts/native_artifacts.py describe --require-release
 
-      - name: Run tests
-        run: uv run pytest tests/ -q
+      - name: Download exact checksum-pinned native release assets
+        run: >-
+          uv run python scripts/native_artifacts.py fetch-release
+          --platform ${{ matrix.label }} --destination build/native-release
+
+      - name: Require real native integration
+        run: uv run pytest tests/ --require-native
+
+      - name: Verify generated models against the pinned schema
+        shell: bash
+        run: >-
+          uv run python scripts/generate_records.py
+          --schema "$BETHKIT_SCHEMA" --output src/bethkit/records/skyrim_se --check
 
       - name: Build wheel
         run: uv build --wheel
 
-      - name: Repair Linux wheel (add manylinux tag)
+      - name: Repair Linux wheel and verify external dependencies
         if: runner.os == 'Linux'
+        shell: bash
         run: |
-          pip install wheel
-          # Detect the minimum glibc version required by the bundled .so
-          # and use it as the manylinux platform tag.
-          SO=src/bethkit/libbethkit_ffi.so
-          GLIBC=$(strings "$SO" \
-            | grep -oP '(?<=GLIBC_)[0-9]+\.[0-9]+' \
-            | sort -V | tail -1)
-          GLIBC=${GLIBC:-2.17}
-          MAJOR=${GLIBC%%.*}; MINOR=${GLIBC##*.}
-          PLAT="manylinux_${MAJOR}_${MINOR}_x86_64"
-          echo "Detected glibc ${GLIBC} -> platform tag ${PLAT}"
-          python -m wheel tags --platform-tag "${PLAT}" --remove dist/bethkit-*.whl
+          sudo apt-get update
+          sudo apt-get install --yes patchelf
+          uv tool run --from auditwheel auditwheel repair --wheel-dir wheelhouse dist/*.whl
+          uv tool run --from auditwheel auditwheel show wheelhouse/*.whl
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.label }}
-          path: dist/*.whl
+          path: ${{ runner.os == 'Linux' && 'wheelhouse/*.whl' || 'dist/*.whl' }}
           if-no-files-found: error
 
   publish-pypi:

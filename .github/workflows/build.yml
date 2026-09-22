@@ -21,10 +21,16 @@ jobs:
         run: uv sync --extra dev
 
       - name: Ruff check
-        run: uv tool run ruff check src/ tests/
+        run: uv run ruff check src/ tests/ scripts/
+
+      - name: Ruff format
+        run: uv run ruff format --check src/ tests/ scripts/
 
       - name: Pyright
-        run: uv tool run pyright src/ tests/
+        run: uv run pyright src/ tests/
+
+      - name: Unit tests without native downloads
+        run: uv run pytest tests/ -m "not integration"
 
   build:
     needs: lint
@@ -54,37 +60,43 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --extra dev
 
-      # Download the native library from the latest bethkit GitHub release.
-      # The ZIP has a flat layout: the DLL sits directly at the root.
-      - name: Download bethkit native library
-        shell: bash
-        run: |
-          BROWSER_URL=$(curl -fsSL \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/Modding-Forge/bethkit/releases/latest \
-            | python3 -c "
-          import json, sys
-          data = json.load(sys.stdin)
-          suffix = '${{ matrix.zip-suffix }}'
-          for a in data.get('assets', []):
-              if a['name'].endswith(f'-{suffix}.zip'):
-                  print(a['browser_download_url'])
-                  break
-          ")
-          curl -fsSL -o native.zip "$BROWSER_URL"
-          unzip -j native.zip "${{ matrix.dll }}" -d src/bethkit/
-          # On Windows, $(pwd) returns a Unix-style path that PowerShell
-          # cannot resolve. cygpath converts it to a Windows path.
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            WIN_PATH=$(cygpath -w "$(pwd)/src/bethkit/${{ matrix.dll }}")
-            echo "BETHKIT_LIB=$WIN_PATH" >> "$GITHUB_ENV"
-          else
-            echo "BETHKIT_LIB=$(pwd)/src/bethkit/${{ matrix.dll }}" >> "$GITHUB_ENV"
-          fi
+      - name: Read immutable native source pin
+        id: native
+        run: uv run python scripts/native_artifacts.py describe
 
-      - name: Run tests
-        run: uv run pytest tests/ -q
+      - name: Check out the required native revision
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.native.outputs.repository }}
+          ref: ${{ steps.native.outputs.revision }}
+          path: build/native-source
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Download checksum-pinned Skyrim SE schema
+        shell: pwsh
+        run: |
+          $schema = ./build/native-source/scripts/Get-SkyrimSeSchema.ps1
+          "BETHKIT_SKYRIM_SE_SCHEMA=$schema" >> $env:GITHUB_ENV
+
+      - name: Build pinned native library with Skyrim SE only
+        working-directory: build/native-source
+        run: cargo build --locked --release -p bethkit-ffi --features schema-skyrim-se
+
+      - name: Configure explicit native inputs
+        run: >-
+          uv run python scripts/native_artifacts.py configure
+          --library build/native-source/target/release/${{ matrix.dll }}
+          --schema build/native-source/target/release-schemas/skyrim_se.bkschema
+
+      - name: Require real native integration
+        run: uv run pytest tests/ --require-native
+
+      - name: Verify generated models against the pinned schema
+        shell: bash
+        run: >-
+          uv run python scripts/generate_records.py
+          --schema "$BETHKIT_SCHEMA" --output src/bethkit/records/skyrim_se --check
 
       - name: Build wheel
         run: uv build --wheel
