@@ -25,7 +25,7 @@ class BethkitGlobalFormId(ctypes.Structure):
 
 
 class BethkitTypedFormId(ctypes.Structure):
-    """A FormID together with the record signatures it is allowed to reference."""
+    """A FormID with the record signatures it is allowed to reference."""
 
     _fields_ = [
         ("raw", ctypes.c_uint32),
@@ -89,10 +89,25 @@ class BethkitFieldValue(ctypes.Structure):
 
 
 class BethkitNamedField(ctypes.Structure):
-    """A named field snapshot inside a BethkitRecordView or BethkitFieldEntries."""
+    """A named field inside a native record view or struct-field list."""
 
     _fields_ = [
         # Points to static memory; never free.
         ("name", ctypes.c_char_p),
         ("value", BethkitFieldValue),
+    ]
+
+
+class BethkitFieldMetadata(ctypes.Structure):
+    """Stable field identity and source span, borrowed from an owned view."""
+
+    _fields_ = [
+        ("node_id", ctypes.c_uint32),
+        ("path", ctypes.c_char_p),
+        ("effective_path", ctypes.c_char_p),
+        ("occurrence", ctypes.c_size_t),
+        ("span_start", ctypes.c_size_t),
+        ("span_end", ctypes.c_size_t),
+        ("origin", ctypes.c_uint32),
+        ("subrecord_signature", ctypes.c_uint8 * 4),
     ]

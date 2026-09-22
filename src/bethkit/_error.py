@@ -77,10 +77,25 @@ class BethkitOwnershipError(BethkitError):
 
 
 class BethkitNotFoundError(BethkitNativeError):
-    """
-    Raised by ``*_required`` convenience methods when a lookup fails.
+    """Raised by ``*_required`` convenience methods when a lookup fails.
 
     Normal lookup methods return ``None`` on not-found; this exception
     is raised only by the strict ``*_required`` variants that must
     succeed or fail loudly.
     """
+
+
+class SchemaMismatchError(BethkitError):
+    """Generated record types do not match the exact loaded schema."""
+
+
+class RecordDecodeError(BethkitError):
+    """A semantic snapshot cannot be represented by its generated model."""
+
+
+class UnsupportedEditError(BethkitError):
+    """An edit cannot be performed without losing structural information."""
+
+
+class StringTableError(BethkitError):
+    """Localized text cannot be resolved or saved consistently."""

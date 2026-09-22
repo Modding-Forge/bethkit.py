@@ -8,9 +8,9 @@ import ctypes
 from pathlib import Path
 from typing import Optional
 
-from .. import _ffi
-from .._error import BethkitClosedError
-from ..enums import StringFileKind
+from bethkit import _ffi
+from bethkit._error import BethkitClosedError
+from bethkit.enums import StringFileKind
 
 
 def _buf_from_bytes(data: bytes) -> ctypes.Array[ctypes.c_uint8]:
@@ -180,7 +180,9 @@ class StringTable:
 
         lib = _ffi.load_lib()
         out_len = ctypes.c_size_t(0)
-        ptr = lib.bethkit_string_table_get(self.__check_open(), id, ctypes.byref(out_len))
+        ptr = lib.bethkit_string_table_get(
+            self.__check_open(), id, ctypes.byref(out_len)
+        )
         if not ptr:
             return None
         return bytes(ctypes.string_at(ptr, out_len.value))
@@ -217,7 +219,12 @@ class StringTable:
 
         lib = _ffi.load_lib()
         buf = _buf_from_bytes(data)
-        if lib.bethkit_string_table_insert(self.__check_open(), id, buf, len(data)) != 0:
+        if (
+            lib.bethkit_string_table_insert(
+                self.__check_open(), id, buf, len(data)
+            )
+            != 0
+        ):
             _ffi.raise_last_error(lib)
 
     def insert_new(self, data: bytes) -> int:
@@ -258,7 +265,9 @@ class StringTable:
             bool: ``True`` if the entry existed and was removed.
         """
 
-        return bool(_ffi.load_lib().bethkit_string_table_remove(self.__check_open(), id))
+        return bool(
+            _ffi.load_lib().bethkit_string_table_remove(self.__check_open(), id)
+        )
 
     def write_to_file(self, path: Path) -> None:
         """
@@ -274,7 +283,9 @@ class StringTable:
 
         lib = _ffi.load_lib()
         if (
-            lib.bethkit_string_table_write_to_file(self.__check_open(), _ffi.enc(path))
+            lib.bethkit_string_table_write_to_file(
+                self.__check_open(), _ffi.enc(path)
+            )
             != 0
         ):
             _ffi.raise_last_error(lib)
@@ -384,6 +395,111 @@ class LocalizationSet:
         if self.__ptr:
             _ffi.load_lib().bethkit_localization_set_free(self.__ptr)
             self.__ptr = 0
+
+    def clone(self) -> LocalizationSet:
+        """Copies all tables into an independently owned localization set.
+
+        Returns:
+            A mutable copy whose changes never affect this set.
+
+        Raises:
+            BethkitClosedError: This set is closed.
+            BethkitNativeError: The native tables could not be copied.
+        """
+
+        pointer = self.__check_open()
+        lib = _ffi.load_lib()
+        result = lib.bethkit_localization_set_clone(pointer)
+        if not result:
+            _ffi.raise_last_error(lib)
+        return LocalizationSet(result)
+
+    def insert_new(self, kind: StringFileKind, data: bytes) -> int:
+        """Allocates a fresh string ID without overwriting existing entries.
+
+        Args:
+            kind: Destination string table.
+            data: String bytes, without an embedded NUL character.
+
+        Returns:
+            The newly allocated unsigned string identifier.
+
+        Raises:
+            BethkitClosedError: This set is closed.
+            BethkitNativeError: Insertion failed or IDs are exhausted.
+        """
+
+        pointer = self.__check_open()
+        lib = _ffi.load_lib()
+        buffer = _buf_from_bytes(data)
+        result = ctypes.c_uint32()
+        if (
+            lib.bethkit_localization_set_insert_new(
+                pointer, int(kind), buffer, len(data), ctypes.byref(result)
+            )
+            != 0
+        ):
+            _ffi.raise_last_error(lib)
+        return result.value
+
+    def remove(self, kind: StringFileKind, string_id: int) -> bool:
+        """Removes one entry, distinguishing absence from native failure.
+
+        Args:
+            kind: Table containing the entry.
+            string_id: Identifier of the entry to remove.
+
+        Returns:
+            Whether an existing entry was removed.
+
+        Raises:
+            BethkitClosedError: This set is closed.
+            BethkitNativeError: Removal failed.
+        """
+
+        pointer = self.__check_open()
+        lib = _ffi.load_lib()
+        status = lib.bethkit_localization_set_remove(
+            pointer, int(kind), string_id
+        )
+        if status == 1:
+            return False
+        if status != 0:
+            _ffi.raise_last_error(lib)
+        return True
+
+    def table_to_bytes(self, kind: StringFileKind) -> bytes:
+        """Serializes one complete table for coordinated output staging.
+
+        Args:
+            kind: Table to serialize.
+
+        Returns:
+            Encoded Bethesda string-table bytes.
+
+        Raises:
+            BethkitClosedError: This set is closed.
+            BethkitNativeError: Serialization failed.
+        """
+
+        pointer = self.__check_open()
+        lib = _ffi.load_lib()
+        result = ctypes.c_void_p()
+        length = ctypes.c_size_t()
+        if (
+            lib.bethkit_localization_set_table_to_bytes(
+                pointer, int(kind), ctypes.byref(result), ctypes.byref(length)
+            )
+            != 0
+        ):
+            _ffi.raise_last_error(lib)
+        try:
+            return bytes(ctypes.string_at(result, length.value))
+        finally:
+            lib.bethkit_bytes_free(
+                ctypes.cast(result, ctypes.POINTER(ctypes.c_uint8)),
+                length.value,
+            )
 
     def __enter__(self) -> LocalizationSet:
         """Return *self* for use as a context manager."""

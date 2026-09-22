@@ -135,7 +135,7 @@ class TestFieldValueKind:
         assert FieldValueKind.MISSING == 10
 
     def test_roundtrip_from_int(self) -> None:
-        """Tests that FieldValueKind can be constructed from its integer value."""
+        """Tests constructing FieldValueKind from an integer."""
 
         # given
         value: int = FieldValueKind.STR.value
@@ -147,7 +147,7 @@ class TestFieldValueKind:
         assert reconstructed == FieldValueKind.STR
 
     def test_all_members_distinct(self) -> None:
-        """Tests that all FieldValueKind members have distinct integer values."""
+        """Tests that FieldValueKind members have distinct values."""
 
         values = [fvk.value for fvk in FieldValueKind]
         assert len(set(values)) == len(values)

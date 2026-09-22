@@ -28,6 +28,36 @@ if TYPE_CHECKING:
 class TestArchive:
     """Tests ``bethkit.archive.archive.Archive``."""
 
+    def test_missing_path_ignores_stale_error(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Distinguishes missing content from a prior unrelated error."""
+
+        # given
+        mock_lib.bethkit_archive_extract_status.return_value = 1
+        mock_lib.bethkit_last_error.return_value = b"an earlier failure"
+
+        # when / then
+        with Archive(0x100) as archive:
+            assert archive.extract("missing.txt") is None
+        mock_lib.bethkit_last_error.assert_not_called()
+        mock_lib.bethkit_bytes_free.assert_not_called()
+
+    def test_extraction_failure_is_not_absence(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Surfaces decompression errors instead of treating them as missing."""
+
+        # given
+        mock_lib.bethkit_archive_extract_status.return_value = -1
+        mock_lib.bethkit_last_error.return_value = b"corrupt compressed data"
+
+        # when / then
+        with Archive(0x100) as archive:
+            with pytest.raises(BethkitNativeError, match="corrupt"):
+                archive.extract("damaged.txt")
+        mock_lib.bethkit_bytes_free.assert_not_called()
+
     def test_open_returns_archive_instance(
         self, mocker: MockerFixture, tmp_path: Path
     ) -> None:
@@ -46,8 +76,10 @@ class TestArchive:
         assert isinstance(archive, Archive)
         archive.close()
 
-    def test_open_raises_on_null_ptr(self, mocker: MockerFixture, tmp_path: Path) -> None:
-        """Tests that Archive.open() raises BethkitNativeError when FFI returns 0."""
+    def test_open_raises_on_null_ptr(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """Raises a native error when opening an archive returns null."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -76,7 +108,9 @@ class TestArchive:
         # then
         mock_lib.bethkit_archive_free.assert_called_once_with(0xDEAD)
 
-    def test_close_is_idempotent(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_close_is_idempotent(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Tests that close() called twice does not double-free."""
 
         # given
@@ -100,7 +134,7 @@ class TestArchive:
         # given
         mock_lib: MagicMock = mocker.MagicMock()
         mock_lib.bethkit_archive_open.return_value = 0xDEAD
-        mock_lib.bethkit_archive_extract.return_value = 0
+        mock_lib.bethkit_archive_extract_status.return_value = 1
         mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
 
         # when
@@ -113,14 +147,14 @@ class TestArchive:
     def test_extract_required_raises_for_missing_file(
         self, mocker: MockerFixture, tmp_path: Path
     ) -> None:
-        """Tests that extract_required() raises BethkitNotFoundError for absent files."""
+        """Raises a not-found error when required content is absent."""
 
         from bethkit import BethkitNotFoundError
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
         mock_lib.bethkit_archive_open.return_value = 0xDEAD
-        mock_lib.bethkit_archive_extract.return_value = 0
+        mock_lib.bethkit_archive_extract_status.return_value = 1
         mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
 
         # when / then
@@ -202,7 +236,7 @@ class TestArchive:
     def test_extract_to_file_raises_after_close(
         self, mocker: MockerFixture, tmp_path: Path
     ) -> None:
-        """Tests that extract_to_file() raises BethkitClosedError after close()."""
+        """Rejects extraction after closing the archive."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -284,7 +318,7 @@ class TestBsaWriter:
     """Tests ``bethkit.archive.archive.BsaWriter``."""
 
     def test_constructor_calls_native(self, mocker: MockerFixture) -> None:
-        """Tests that BsaWriter() calls bethkit_bsa_writer_new and wraps the ptr."""
+        """Wraps a newly created native BSA writer."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -344,7 +378,7 @@ class TestBsaWriter:
             writer.add("meshes/foo.nif", b"\x00" * 16)
 
     def test_set_compress_calls_native(self, mocker: MockerFixture) -> None:
-        """Tests that set_compress() delegates to bethkit_bsa_writer_set_compress."""
+        """Delegates compression settings to the native writer."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -392,7 +426,9 @@ class TestBsaWriter:
         # then
         mock_lib.bethkit_bsa_writer_add.assert_called_once()
 
-    def test_write_to_calls_native(self, mocker: MockerFixture, tmp_path: Path) -> None:
+    def test_write_to_calls_native(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
         """Tests that write_to() delegates to bethkit_bsa_writer_write_to."""
 
         # given
@@ -413,7 +449,7 @@ class TestBa2GnrlWriter:
     """Tests ``bethkit.archive.archive.Ba2GnrlWriter``."""
 
     def test_constructor_calls_native(self, mocker: MockerFixture) -> None:
-        """Tests that Ba2GnrlWriter() calls bethkit_ba2_gnrl_writer_new and wraps ptr."""
+        """Wraps a newly created native BA2 writer."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -472,8 +508,10 @@ class TestBa2GnrlWriter:
         # then
         mock_lib.bethkit_ba2_gnrl_writer_add.assert_called_once()
 
-    def test_write_to_calls_native(self, mocker: MockerFixture, tmp_path: Path) -> None:
-        """Tests that write_to() delegates to bethkit_ba2_gnrl_writer_write_to."""
+    def test_write_to_calls_native(
+        self, mocker: MockerFixture, tmp_path: Path
+    ) -> None:
+        """Delegates writing to the native BA2 writer."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()

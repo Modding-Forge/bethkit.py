@@ -50,7 +50,7 @@ class TestBethkitError:
         assert issubclass(BethkitNotFoundError, BethkitNativeError)
 
     def test_not_found_can_be_caught_as_native(self) -> None:
-        """Tests that BethkitNotFoundError is caught by except BethkitNativeError."""
+        """Tests that BethkitNativeError catches BethkitNotFoundError."""
 
         # given / when / then
         with pytest.raises(BethkitNativeError):

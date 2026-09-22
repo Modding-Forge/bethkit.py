@@ -73,7 +73,9 @@ class TestPluginCache:
         # then
         mock_lib.bethkit_plugin_cache_free.assert_called_once()
 
-    def test_record_count_raises_after_close(self, mocker: MockerFixture) -> None:
+    def test_record_count_raises_after_close(
+        self, mocker: MockerFixture
+    ) -> None:
         """Tests that record_count raises BethkitClosedError after close()."""
 
         # given
@@ -87,8 +89,10 @@ class TestPluginCache:
         with pytest.raises(BethkitClosedError):
             _ = cache.record_count
 
-    def test_add_transfers_plugin_ownership(self, mocker: MockerFixture) -> None:
-        """Tests that add() transfers Plugin ownership; plugin becomes invalid."""
+    def test_add_transfers_plugin_ownership(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Transfers ownership and invalidates the plugin wrapper."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -107,7 +111,9 @@ class TestPluginCache:
         with pytest.raises(BethkitClosedError):
             _ = plugin.kind
 
-    def test_add_raises_type_error_for_non_plugin(self, mocker: MockerFixture) -> None:
+    def test_add_raises_type_error_for_non_plugin(
+        self, mocker: MockerFixture
+    ) -> None:
         """Tests that add() raises TypeError when given a non-Plugin object."""
 
         # given
@@ -123,7 +129,7 @@ class TestPluginCache:
     def test_add_raises_ownership_error_for_transferred_plugin(
         self, mocker: MockerFixture
     ) -> None:
-        """Tests that add() raises BethkitOwnershipError for an already-added plugin."""
+        """Rejects adding a plugin whose ownership already transferred."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -196,7 +202,9 @@ class TestPluginCache:
         # then
         assert result is None
 
-    def test_find_by_editor_id_returns_cache_hit(self, mocker: MockerFixture) -> None:
+    def test_find_by_editor_id_returns_cache_hit(
+        self, mocker: MockerFixture
+    ) -> None:
         """Tests that find_by_editor_id() returns a CacheHit with a Record."""
 
         # given
@@ -212,7 +220,9 @@ class TestPluginCache:
             "bethkit.plugin.cache.BethkitGlobalFormId",
             return_value=out_struct,
         )
-        mocker.patch("bethkit.plugin.cache.ctypes.byref", return_value=out_struct)
+        mocker.patch(
+            "bethkit.plugin.cache.ctypes.byref", return_value=out_struct
+        )
         mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
 
         # when
@@ -233,7 +243,7 @@ class TestCacheHit:
 
         # given
         gfid = GlobalFormId(plugin_name="Skyrim.esm", object_id=0x12E49)
-        sentinel_record = Record(0xDEAD, object())
+        sentinel_record = Record(0xDEAD, Plugin(0))
 
         # when
         hit = CacheHit(record=sentinel_record, global_form_id=gfid)

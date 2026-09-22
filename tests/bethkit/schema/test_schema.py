@@ -21,7 +21,10 @@ from bethkit import (
 class _Record:
     """Minimal record handle used by editor/view wrapper tests."""
 
-    _ptr = 404
+    def _native_pointer(self) -> int:
+        """Returns an always-live mocked native record pointer."""
+
+        return 404
 
 
 def test_catalog_embedded_is_owned(mock_lib: MagicMock) -> None:
@@ -45,7 +48,8 @@ def test_catalog_package_uses_all_game_enum_values(mock_lib: MagicMock) -> None:
             package.close()
 
     requested = {
-        call.args[1] for call in mock_lib.bethkit_schema_catalog_package.call_args_list
+        call.args[1]
+        for call in mock_lib.bethkit_schema_catalog_package.call_args_list
     }
     assert requested == set(range(11))
 
@@ -100,3 +104,4 @@ def test_record_editor_sets_and_finishes(mock_lib: MagicMock) -> None:
         12,
     )
     mock_lib.bethkit_writable_record_free.assert_called_once_with(606)
+    mock_lib.bethkit_record_editor_free.assert_called_once_with(505)

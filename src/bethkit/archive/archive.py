@@ -9,9 +9,9 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Optional
 
-from .. import _ffi
-from .._error import BethkitClosedError, BethkitNotFoundError
-from ..enums import Ba2Version, BsaVersion
+from bethkit import _ffi, _ownership
+from bethkit._error import BethkitClosedError, BethkitNotFoundError
+from bethkit.enums import Ba2Version, BsaVersion
 
 
 def _buf_from_bytes(data: bytes) -> ctypes.Array[ctypes.c_uint8]:
@@ -28,16 +28,13 @@ def _buf_from_bytes(data: bytes) -> ctypes.Array[ctypes.c_uint8]:
     return (ctypes.c_uint8 * len(data)).from_buffer_copy(data)
 
 
-class ArchiveEntry:
+class ArchiveEntry(_ownership.BorrowedHandle):
     """
     A single file entry inside an open archive.
 
     Instances borrow their data from the parent :class:`Archive` and
     become invalid once the archive is closed or freed.
     """
-
-    _ptr: int
-    _parent: Archive
 
     def __init__(self, ptr: int, parent: Archive) -> None:
         """
@@ -46,8 +43,7 @@ class ArchiveEntry:
             parent (Archive): Owning archive that keeps native memory alive.
         """
 
-        self._ptr = ptr
-        self._parent = parent
+        super().__init__(ptr, parent)
 
     @property
     def path(self) -> str:
@@ -59,10 +55,12 @@ class ArchiveEntry:
         """
 
         lib = _ffi.load_lib()
-        ptr = lib.bethkit_archive_entry_path(self._ptr)
+        ptr = lib.bethkit_archive_entry_path(self._native_pointer())
         if not ptr:
             return ""
-        return _ffi.copy_and_free_str(ptr, lib.bethkit_archive_entry_path_free, lib)
+        return _ffi.copy_and_free_str(
+            ptr, lib.bethkit_archive_entry_path_free, lib
+        )
 
     @property
     def uncompressed_size(self) -> int:
@@ -73,7 +71,9 @@ class ArchiveEntry:
             int: Byte count of the decompressed content.
         """
 
-        return _ffi.load_lib().bethkit_archive_entry_uncompressed_size(self._ptr)
+        return _ffi.load_lib().bethkit_archive_entry_uncompressed_size(
+            self._native_pointer()
+        )
 
     def __repr__(self) -> str:
         """
@@ -152,6 +152,15 @@ class Archive:
             _ffi.load_lib().bethkit_archive_free(self.__ptr)
             self.__ptr = 0
 
+    def _check_borrowed(self) -> None:
+        """Checks whether the archive still owns its borrowed entries.
+
+        Raises:
+            BethkitClosedError: If the archive has already been closed.
+        """
+
+        self.__check_open()
+
     def __enter__(self) -> Archive:
         """Return *self* for use as a context manager."""
 
@@ -184,7 +193,9 @@ class Archive:
         """
 
         lib = _ffi.load_lib()
-        raw: Optional[bytes] = lib.bethkit_archive_format_name(self.__check_open())
+        raw: Optional[bytes] = lib.bethkit_archive_format_name(
+            self.__check_open()
+        )
         return raw.decode("utf-8") if raw else ""
 
     @property
@@ -257,11 +268,17 @@ class Archive:
 
         lib = _ffi.load_lib()
         out_len = ctypes.c_size_t(0)
-        ptr = lib.bethkit_archive_extract(
-            self.__check_open(), _ffi.senc(path), ctypes.byref(out_len)
+        ptr = ctypes.POINTER(ctypes.c_uint8)()
+        status = lib.bethkit_archive_extract_status(
+            self.__check_open(),
+            _ffi.senc(path),
+            ctypes.byref(ptr),
+            ctypes.byref(out_len),
         )
-        if not ptr:
+        if status == 1:
             return None
+        if status != 0:
+            _ffi.raise_last_error(lib)
         try:
             return bytes(ctypes.string_at(ptr, out_len.value))
         finally:
@@ -406,7 +423,10 @@ class BsaWriter:
         """
 
         lib = _ffi.load_lib()
-        if lib.bethkit_bsa_writer_set_compress(self.__check_open(), compress) != 0:
+        if (
+            lib.bethkit_bsa_writer_set_compress(self.__check_open(), compress)
+            != 0
+        ):
             _ffi.raise_last_error(lib)
 
     def set_embed_names(self, embed: bool) -> None:
@@ -422,7 +442,10 @@ class BsaWriter:
         """
 
         lib = _ffi.load_lib()
-        if lib.bethkit_bsa_writer_set_embed_names(self.__check_open(), embed) != 0:
+        if (
+            lib.bethkit_bsa_writer_set_embed_names(self.__check_open(), embed)
+            != 0
+        ):
             _ffi.raise_last_error(lib)
 
     def add(self, path: str, data: bytes) -> None:
@@ -462,7 +485,10 @@ class BsaWriter:
         """
 
         lib = _ffi.load_lib()
-        if lib.bethkit_bsa_writer_write_to(self.__check_open(), _ffi.enc(dest)) != 0:
+        if (
+            lib.bethkit_bsa_writer_write_to(self.__check_open(), _ffi.enc(dest))
+            != 0
+        ):
             _ffi.raise_last_error(lib)
 
 
@@ -571,7 +597,12 @@ class Ba2GnrlWriter:
         """
 
         lib = _ffi.load_lib()
-        if lib.bethkit_ba2_gnrl_writer_write_to(self.__check_open(), _ffi.enc(dest)) != 0:
+        if (
+            lib.bethkit_ba2_gnrl_writer_write_to(
+                self.__check_open(), _ffi.enc(dest)
+            )
+            != 0
+        ):
             _ffi.raise_last_error(lib)
 
 
@@ -680,5 +711,10 @@ class Ba2Dx10Writer:
         """
 
         lib = _ffi.load_lib()
-        if lib.bethkit_ba2_dx10_writer_write_to(self.__check_open(), _ffi.enc(dest)) != 0:
+        if (
+            lib.bethkit_ba2_dx10_writer_write_to(
+                self.__check_open(), _ffi.enc(dest)
+            )
+            != 0
+        ):
             _ffi.raise_last_error(lib)

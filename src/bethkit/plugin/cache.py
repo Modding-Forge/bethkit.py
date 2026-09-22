@@ -9,20 +9,41 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
-from .. import _ffi
-from .._error import BethkitClosedError, BethkitOwnershipError
-from .._ffi import BethkitGlobalFormId
-from ..load_order import GlobalFormId
+from bethkit import _ffi
+from bethkit._error import BethkitClosedError, BethkitOwnershipError
+from bethkit._ffi import BethkitGlobalFormId
+from bethkit.load_order import GlobalFormId
+from bethkit.plugin import plugin as plugin_module
 
 
-class CacheHit(BaseModel):
+def _require_plugin(value: object) -> plugin_module.Plugin:
+    """Validates a plugin at the ownership-transfer boundary.
+
+    Args:
+        value: User-provided plugin argument.
+
+    Returns:
+        The validated plugin wrapper.
+
+    Raises:
+        TypeError: The argument is not a plugin wrapper.
+    """
+
+    if not isinstance(value, plugin_module.Plugin):
+        raise TypeError(
+            f"plugin must be a Plugin instance, got {type(value).__name__!r}"
+        )
+    return value
+
+
+class CacheHit(BaseModel, frozen=True):
     """
     Result of a successful :meth:`PluginCache.find_by_editor_id` lookup.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    record: object
+    record: plugin_module.Record
     """The matched record (borrowed, valid while the cache is open)."""
 
     global_form_id: GlobalFormId
@@ -85,6 +106,15 @@ class PluginCache:
             _ffi.load_lib().bethkit_plugin_cache_free(self.__ptr)
             self.__ptr = 0
 
+    def _check_borrowed(self) -> None:
+        """Checks whether the cache still owns its borrowed records.
+
+        Raises:
+            BethkitClosedError: If the cache has already been closed.
+        """
+
+        self.__check_open()
+
     def __enter__(self) -> PluginCache:
         """
         Return *self* for use as a context manager.
@@ -108,7 +138,7 @@ class PluginCache:
         except Exception:
             pass
 
-    def add(self, name: str, plugin: object) -> None:
+    def add(self, name: str, plugin: plugin_module.Plugin) -> None:
         """
         Transfer a :class:`~bethkit.Plugin` into the cache.
 
@@ -129,21 +159,18 @@ class PluginCache:
             TypeError: If *plugin* is not a ``Plugin`` instance.
         """
 
-        from .plugin import Plugin
-
-        if not isinstance(plugin, Plugin):
-            raise TypeError(
-                f"plugin must be a Plugin instance, got {type(plugin).__name__!r}"
-            )
+        plugin = _require_plugin(plugin)
         ptr = self.__check_open()
         lib = _ffi.load_lib()
+        encoded_name = _ffi.senc(name)
         plugin_ptr: int = plugin._transfer_ptr()
         if not plugin_ptr:
             raise BethkitOwnershipError(
                 "Plugin handle has already been transferred or closed."
             )
-        if lib.bethkit_plugin_cache_add(ptr, _ffi.senc(name), plugin_ptr) != 0:
+        if lib.bethkit_plugin_cache_add(ptr, encoded_name, plugin_ptr) != 0:
             _ffi.raise_last_error(lib)
+        plugin._set_borrow_owner(self)
 
     def __len__(self) -> int:
         """
@@ -170,9 +197,13 @@ class PluginCache:
             BethkitClosedError: If this cache has already been closed.
         """
 
-        return _ffi.load_lib().bethkit_plugin_cache_record_count(self.__check_open())
+        return _ffi.load_lib().bethkit_plugin_cache_record_count(
+            self.__check_open()
+        )
 
-    def resolve(self, plugin_name: str, object_id: int) -> Optional[object]:
+    def resolve(
+        self, plugin_name: str, object_id: int
+    ) -> Optional[plugin_module.Record]:
         """
         Look up a record by its global FormID components.
 
@@ -188,15 +219,13 @@ class PluginCache:
             BethkitClosedError: If this cache has already been closed.
         """
 
-        from .plugin import Record
-
         lib = _ffi.load_lib()
         ptr_val = lib.bethkit_plugin_cache_resolve(
             self.__check_open(), _ffi.senc(plugin_name), object_id
         )
         if not ptr_val:
             return None
-        return Record(ptr_val, self)
+        return plugin_module.Record(ptr_val, self)
 
     def find_by_editor_id(self, edid: str) -> Optional[CacheHit]:
         """
@@ -214,8 +243,6 @@ class PluginCache:
             BethkitClosedError: If this cache has already been closed.
         """
 
-        from .plugin import Record
-
         lib = _ffi.load_lib()
         out = BethkitGlobalFormId()
         ptr_val = lib.bethkit_plugin_cache_find_by_editor_id(
@@ -226,7 +253,9 @@ class PluginCache:
         plugin_name_raw: Optional[bytes] = out.plugin_name
         plugin_name = plugin_name_raw.decode("utf-8") if plugin_name_raw else ""
         gfid = GlobalFormId(plugin_name=plugin_name, object_id=out.object_id)
-        return CacheHit(record=Record(ptr_val, self), global_form_id=gfid)
+        return CacheHit(
+            record=plugin_module.Record(ptr_val, self), global_form_id=gfid
+        )
 
     def __repr__(self) -> str:
         """

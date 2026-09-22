@@ -1,0 +1,200 @@
+"""
+Copyright (c) Modding Forge
+
+Generated from the pinned xEdit/Bethkit schema. Do not edit.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated, ClassVar, Literal, Optional, overload
+
+import pydantic
+
+from .. import _base, _values
+
+
+class Structure9098(_base.StructModel, frozen=True):
+    """Schema-generated immutable structural view."""
+
+    _schema_path: ClassVar[str] = "CLFM/2:Color/payload"
+    _grammar: ClassVar[bool] = False
+    _bindings: ClassVar[dict[str, _base.Binding]] = {
+        "red": _base.Binding(
+            path="CLFM/2:Color/payload/0:Red",
+            kind="primitive",
+            name="Red",
+        ),
+        "green": _base.Binding(
+            path="CLFM/2:Color/payload/1:Green",
+            kind="primitive",
+            name="Green",
+        ),
+        "blue": _base.Binding(
+            path="CLFM/2:Color/payload/2:Blue",
+            kind="primitive",
+            name="Blue",
+        ),
+        "alpha": _base.Binding(
+            path="CLFM/2:Color/payload/3:Alpha",
+            kind="primitive",
+            name="Alpha",
+        ),
+    }
+
+    red: Annotated[int, pydantic.Field(strict=True, ge=0, le=255)]
+    """Value decoded from this schema node."""
+
+    green: Annotated[int, pydantic.Field(strict=True, ge=0, le=255)]
+    """Value decoded from this schema node."""
+
+    blue: Annotated[int, pydantic.Field(strict=True, ge=0, le=255)]
+    """Value decoded from this schema node."""
+
+    alpha: Annotated[int, pydantic.Field(strict=True, ge=0, le=255)]
+    """Value decoded from this schema node."""
+
+    @overload
+    def field(
+        self, name: Literal["red"]
+    ) -> _base.FieldRef[
+        Annotated[int, pydantic.Field(strict=True, ge=0, le=255)]
+    ]:
+        """Returns the typed field reference."""
+
+        ...
+
+    @overload
+    def field(
+        self, name: Literal["green"]
+    ) -> _base.FieldRef[
+        Annotated[int, pydantic.Field(strict=True, ge=0, le=255)]
+    ]:
+        """Returns the typed field reference."""
+
+        ...
+
+    @overload
+    def field(
+        self, name: Literal["blue"]
+    ) -> _base.FieldRef[
+        Annotated[int, pydantic.Field(strict=True, ge=0, le=255)]
+    ]:
+        """Returns the typed field reference."""
+
+        ...
+
+    @overload
+    def field(
+        self, name: Literal["alpha"]
+    ) -> _base.FieldRef[
+        Annotated[int, pydantic.Field(strict=True, ge=0, le=255)]
+    ]:
+        """Returns the typed field reference."""
+
+        ...
+
+    @overload
+    def field(self, name: str) -> _base.FieldReference:
+        """Returns a dynamically selected reference."""
+
+        ...
+
+    def field(self, name: str) -> _base.FieldReference:
+        """Returns the snapshot field reference."""
+
+        return super().field(name)
+
+
+class FalseTrue9104(_values.OpenIntEnum):
+    """Named values from the pinned schema."""
+
+    FALSE = 0
+    TRUE = 1
+
+
+class ColorRecord(_base.RecordModel, frozen=True):
+    """Schema-generated immutable structural view."""
+
+    _schema_path: ClassVar[str] = "CLFM"
+    _grammar: ClassVar[bool] = True
+    signature: ClassVar[str] = "CLFM"
+    schema_sha256: ClassVar[str] = (
+        "66998fb3c765fbe4b29059c6d68722d1b53a1951b0ab300ff530ca19104104c7"
+    )
+    _bindings: ClassVar[dict[str, _base.Binding]] = {
+        "editor_id": _base.Binding(
+            path="CLFM/0:Editor ID",
+            kind="subrecord",
+            name="Editor ID",
+        ),
+        "name": _base.Binding(
+            path="CLFM/1:Name",
+            kind="subrecord",
+            name="Name",
+        ),
+        "color": _base.Binding(
+            path="CLFM/2:Color",
+            kind="subrecord",
+            name="Color",
+        ),
+        "playable": _base.Binding(
+            path="CLFM/3:Playable",
+            kind="subrecord",
+            name="Playable",
+        ),
+    }
+
+    editor_id: Optional[str] = None
+    """Value decoded from this schema node."""
+
+    name: Optional[str | _values.UInt32] = None
+    """Value decoded from this schema node."""
+
+    color: Optional[Structure9098] = None
+    """Value decoded from this schema node."""
+
+    playable: Optional[FalseTrue9104] = None
+    """Value decoded from this schema node."""
+
+    @overload
+    def field(
+        self, name: Literal["editor_id"]
+    ) -> _base.FieldRef[Optional[str]]:
+        """Returns the typed field reference."""
+
+        ...
+
+    @overload
+    def field(
+        self, name: Literal["name"]
+    ) -> _base.FieldRef[Optional[str | _values.UInt32]]:
+        """Returns the typed field reference."""
+
+        ...
+
+    @overload
+    def field(
+        self, name: Literal["color"]
+    ) -> _base.FieldRef[Optional[Structure9098]]:
+        """Returns the typed field reference."""
+
+        ...
+
+    @overload
+    def field(
+        self, name: Literal["playable"]
+    ) -> _base.FieldRef[Optional[FalseTrue9104]]:
+        """Returns the typed field reference."""
+
+        ...
+
+    @overload
+    def field(self, name: str) -> _base.FieldReference:
+        """Returns a dynamically selected reference."""
+
+        ...
+
+    def field(self, name: str) -> _base.FieldReference:
+        """Returns the snapshot field reference."""
+
+        return super().field(name)

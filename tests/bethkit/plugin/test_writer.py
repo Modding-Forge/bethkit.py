@@ -86,7 +86,9 @@ class TestWritableRecord:
         mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
 
         # when
-        with WritableRecord.new(b"NPC_", flags=0x40, form_id=0x000D62, form_version=44):
+        with WritableRecord.new(
+            b"NPC_", flags=0x40, form_id=0x000D62, form_version=44
+        ):
             pass
 
         # then
@@ -96,8 +98,10 @@ class TestWritableRecord:
         assert form_id == 0x000D62
         assert form_version == 44
 
-    def test_transfer_ptr_returns_and_zeroes_handle(self, mocker: MockerFixture) -> None:
-        """Tests that _transfer_ptr() returns the ptr and invalidates the handle."""
+    def test_transfer_ptr_returns_and_zeroes_handle(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Transfers the native pointer and invalidates its wrapper."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -130,8 +134,10 @@ class TestWritableRecord:
         # then
         mock_lib.bethkit_writable_record_add_subrecord.assert_called_once()
 
-    def test_add_subrecord_raises_after_close(self, mocker: MockerFixture) -> None:
-        """Tests that add_subrecord() raises BethkitClosedError after close()."""
+    def test_add_subrecord_raises_after_close(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Rejects subrecord insertion after closing the record."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -159,8 +165,10 @@ class TestWritableRecord:
         # then
         mock_lib.bethkit_writable_record_free.assert_called_once_with(0xABCD)
 
-    def test_close_skips_free_after_transfer(self, mocker: MockerFixture) -> None:
-        """Tests that close() is a no-op after _transfer_ptr() has been called."""
+    def test_close_skips_free_after_transfer(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Does not free a native pointer after ownership transfers."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -194,7 +202,9 @@ class TestWritableGroup:
         assert isinstance(group, WritableGroup)
         group.close()
 
-    def test_add_record_transfers_ownership(self, mocker: MockerFixture) -> None:
+    def test_add_record_transfers_ownership(
+        self, mocker: MockerFixture
+    ) -> None:
         """Tests that add_record() takes ownership of the WritableRecord."""
 
         # given
@@ -232,7 +242,9 @@ class TestWritableGroup:
             group.add_record(rec)
         rec.close()
 
-    def test_transfer_ptr_invalidates_group(self, mocker: MockerFixture) -> None:
+    def test_transfer_ptr_invalidates_group(
+        self, mocker: MockerFixture
+    ) -> None:
         """Tests that _transfer_ptr() zeroes the group handle."""
 
         # given
@@ -253,6 +265,74 @@ class TestWritableGroup:
 class TestPluginWriter:
     """Tests ``bethkit.plugin.writer.PluginWriter``."""
 
+    def test_header_setters_delegate_to_native(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Passes master, description, and localization metadata explicitly."""
+
+        # given
+        mock_lib.bethkit_plugin_writer_new.return_value = 0xCCCC
+        mock_lib.bethkit_plugin_writer_add_master.return_value = 0
+        mock_lib.bethkit_plugin_writer_set_description.return_value = 0
+        mock_lib.bethkit_plugin_writer_set_localized.return_value = 0
+
+        # when
+        with PluginWriter(Game.SKYRIM_SE) as writer:
+            writer.add_master("Skyrim.esm")
+            writer.set_description("A test plugin")
+            writer.set_localized(True)
+
+        # then
+        mock_lib.bethkit_plugin_writer_add_master.assert_called_once_with(
+            0xCCCC, b"Skyrim.esm"
+        )
+        mock_lib.bethkit_plugin_writer_set_description.assert_called_once_with(
+            0xCCCC, b"A test plugin"
+        )
+        mock_lib.bethkit_plugin_writer_set_localized.assert_called_once_with(
+            0xCCCC, True
+        )
+
+    def test_header_setters_reject_closed_writer(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Does not mutate native state after the writer closes."""
+
+        # given
+        mock_lib.bethkit_plugin_writer_new.return_value = 0xCCCC
+        writer = PluginWriter(Game.SKYRIM_SE)
+        writer.close()
+
+        # when / then
+        with pytest.raises(BethkitClosedError):
+            writer.add_master("Skyrim.esm")
+        with pytest.raises(BethkitClosedError):
+            writer.set_description("A test plugin")
+        with pytest.raises(BethkitClosedError):
+            writer.set_localized(True)
+        mock_lib.bethkit_plugin_writer_add_master.assert_not_called()
+        mock_lib.bethkit_plugin_writer_set_description.assert_not_called()
+        mock_lib.bethkit_plugin_writer_set_localized.assert_not_called()
+
+    @pytest.mark.integration
+    def test_header_setters_round_trip(self) -> None:
+        """Reads all configured header metadata through the native parser."""
+
+        # given
+        with PluginWriter(Game.SKYRIM_SE) as writer:
+            writer.add_master("Skyrim.esm")
+            writer.set_description("Localization fixture")
+            writer.set_localized(True)
+
+            # when
+            data = writer.write_to_bytes()
+
+        # then
+        with Plugin.from_bytes(data, Game.SKYRIM_SE) as plugin:
+            assert plugin.masters == ["Skyrim.esm"]
+            assert plugin.description == "Localization fixture"
+            assert plugin.is_localized
+
     def test_constructor_calls_writer_new(self, mocker: MockerFixture) -> None:
         """Tests that __init__ calls bethkit_plugin_writer_new with game int."""
 
@@ -271,7 +351,9 @@ class TestPluginWriter:
         assert game_arg == int(Game.SKYRIM_SE)
         writer.close()
 
-    def test_constructor_raises_on_null_ptr(self, mocker: MockerFixture) -> None:
+    def test_constructor_raises_on_null_ptr(
+        self, mocker: MockerFixture
+    ) -> None:
         """Tests that __init__ raises BethkitNativeError when FFI returns 0."""
 
         # given
@@ -299,7 +381,9 @@ class TestPluginWriter:
         # then
         mock_lib.bethkit_plugin_writer_free.assert_called_once_with(0xCCCC)
 
-    def test_add_group_transfers_group_ownership(self, mocker: MockerFixture) -> None:
+    def test_add_group_transfers_group_ownership(
+        self, mocker: MockerFixture
+    ) -> None:
         """Tests that add_group() takes ownership of the WritableGroup."""
 
         # given
@@ -359,7 +443,7 @@ class TestPluginWriter:
     def test_write_to_file_raises_after_close(
         self, mocker: MockerFixture, tmp_path: Path
     ) -> None:
-        """Tests that write_to_file() raises BethkitClosedError after close()."""
+        """Rejects file serialization after closing the writer."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -391,8 +475,10 @@ class TestPluginWriter:
         assert isinstance(result, bytes)
         mock_lib.bethkit_bytes_free.assert_called_once()
 
-    def test_write_to_bytes_raises_after_close(self, mocker: MockerFixture) -> None:
-        """Tests that write_to_bytes() raises BethkitClosedError after close()."""
+    def test_write_to_bytes_raises_after_close(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Rejects byte serialization after closing the writer."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -405,8 +491,10 @@ class TestPluginWriter:
         with pytest.raises(BethkitClosedError):
             writer.write_to_bytes()
 
-    def test_default_hedr_version_skyrim_se(self, mocker: MockerFixture) -> None:
-        """Tests that PluginWriter defaults to HEDR version 1.7 for SKYRIM_SE."""
+    def test_default_hedr_version_skyrim_se(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Defaults to HEDR version 1.7 for Skyrim SE."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -422,7 +510,7 @@ class TestPluginWriter:
         assert math.isclose(hedr, 1.7, abs_tol=1e-4)
 
     def test_default_hedr_version_fallout4(self, mocker: MockerFixture) -> None:
-        """Tests that PluginWriter defaults to HEDR version 0.95 for FALLOUT4."""
+        """Defaults to HEDR version 0.95 for Fallout 4."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -437,8 +525,10 @@ class TestPluginWriter:
         _game, hedr = mock_lib.bethkit_plugin_writer_new.call_args.args
         assert math.isclose(hedr, 0.95, abs_tol=1e-4)
 
-    def test_explicit_hedr_version_is_forwarded(self, mocker: MockerFixture) -> None:
-        """Tests that an explicit hedr_version overrides the per-game default."""
+    def test_explicit_hedr_version_is_forwarded(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Preserves an explicit HEDR version instead of the game default."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()

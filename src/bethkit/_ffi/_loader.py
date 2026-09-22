@@ -12,6 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from ._types import (
+    BethkitFieldMetadata,
     BethkitFieldValue,
     BethkitGlobalFormId,
     BethkitNamedField,
@@ -102,13 +103,27 @@ def load_lib() -> ctypes.CDLL:
                     "libbethkit_ffi.dylib next to the package or set the "
                     "BETHKIT_LIB environment variable."
                 ) from exc
-            _declare(loaded)
-            abi_version = int(loaded.bethkit_abi_version())
+            try:
+                loaded.bethkit_abi_version.restype = ctypes.c_uint32
+                loaded.bethkit_abi_version.argtypes = []
+                abi_version = int(loaded.bethkit_abi_version())
+            except AttributeError as exc:
+                raise BethkitLibraryNotFoundError(
+                    f"Native library '{path}' predates ABI 2. "
+                    "Replace the bundled library or set BETHKIT_LIB."
+                ) from exc
             if abi_version != 2:
                 raise BethkitLibraryNotFoundError(
                     f"bethkit native ABI {abi_version} is incompatible; "
                     "ABI 2 is required."
                 )
+            try:
+                _declare(loaded)
+            except AttributeError as exc:
+                raise BethkitLibraryNotFoundError(
+                    f"Native library '{path}' lacks a required API: {exc}. "
+                    "Use the native revision pinned by this Python package."
+                ) from exc
             _lib = loaded
     return _lib
 
@@ -203,6 +218,8 @@ def senc(s: str) -> bytes:
         bytes: UTF-8 encoded bytes.
     """
 
+    if "\x00" in s:
+        raise ValueError("Native strings cannot contain NUL characters.")
     return s.encode("utf-8")
 
 
@@ -220,6 +237,70 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_abi_version.restype = _u32
     lib.bethkit_abi_version.argtypes = []
 
+    lib.bethkit_string_free.restype = None
+    lib.bethkit_string_free.argtypes = [_vp]
+
+    lib.bethkit_schema_package_manifest_json.restype = _vp
+    lib.bethkit_schema_package_manifest_json.argtypes = [_vp]
+    lib.bethkit_schema_package_graph_json.restype = _vp
+    lib.bethkit_schema_package_graph_json.argtypes = [_vp]
+
+    lib.bethkit_semantic_validate_json.restype = _vp
+    lib.bethkit_semantic_validate_json.argtypes = [_vp, _vp, _bl, _u32]
+
+    lib.bethkit_record_view_field_metadata.restype = _i32
+    lib.bethkit_record_view_field_metadata.argtypes = [
+        _vp,
+        _sz,
+        ctypes.POINTER(BethkitFieldMetadata),
+    ]
+    lib.bethkit_field_entries_metadata.restype = _i32
+    lib.bethkit_field_entries_metadata.argtypes = [
+        _vp,
+        _sz,
+        ctypes.POINTER(BethkitFieldMetadata),
+    ]
+
+    lib.bethkit_load_order_resolve_with_plugin.restype = _i32
+    lib.bethkit_load_order_resolve_with_plugin.argtypes = [
+        _vp,
+        _u32,
+        _c,
+        _vp,
+        ctypes.POINTER(BethkitGlobalFormId),
+    ]
+    lib.bethkit_archive_extract_status.restype = _i32
+    lib.bethkit_archive_extract_status.argtypes = [
+        _vp,
+        _c,
+        ctypes.POINTER(ctypes.POINTER(_u8)),
+        ctypes.POINTER(_sz),
+    ]
+    lib.bethkit_record_editor_id_status.restype = _i32
+    lib.bethkit_record_editor_id_status.argtypes = [_vp, ctypes.POINTER(_vp)]
+
+    lib.bethkit_plugin_patcher_new.restype = _vp
+    lib.bethkit_plugin_patcher_new.argtypes = [_vp]
+    lib.bethkit_plugin_patcher_free.restype = None
+    lib.bethkit_plugin_patcher_free.argtypes = [_vp]
+    lib.bethkit_plugin_patcher_replace_record.restype = _i32
+    lib.bethkit_plugin_patcher_replace_record.argtypes = [_vp, _u32, _vp]
+    lib.bethkit_plugin_patcher_write_to_bytes.restype = _i32
+    lib.bethkit_plugin_patcher_write_to_bytes.argtypes = [
+        _vp,
+        ctypes.POINTER(ctypes.POINTER(_u8)),
+        ctypes.POINTER(_sz),
+    ]
+    lib.bethkit_plugin_patcher_write_to_file.restype = _i32
+    lib.bethkit_plugin_patcher_write_to_file.argtypes = [_vp, _c]
+
+    lib.bethkit_plugin_writer_add_master.restype = _i32
+    lib.bethkit_plugin_writer_add_master.argtypes = [_vp, _c]
+    lib.bethkit_plugin_writer_set_description.restype = _i32
+    lib.bethkit_plugin_writer_set_description.argtypes = [_vp, _c]
+    lib.bethkit_plugin_writer_set_localized.restype = _i32
+    lib.bethkit_plugin_writer_set_localized.argtypes = [_vp, _bl]
+
     lib.bethkit_bytes_free.restype = None
     lib.bethkit_bytes_free.argtypes = [ctypes.POINTER(_u8), _sz]
 
@@ -227,7 +308,11 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_plugin_open.argtypes = [_c, _i32]
 
     lib.bethkit_plugin_open_from_bytes.restype = _vp
-    lib.bethkit_plugin_open_from_bytes.argtypes = [ctypes.POINTER(_u8), _sz, _i32]
+    lib.bethkit_plugin_open_from_bytes.argtypes = [
+        ctypes.POINTER(_u8),
+        _sz,
+        _i32,
+    ]
 
     lib.bethkit_plugin_free.restype = None
     lib.bethkit_plugin_free.argtypes = [_vp]
@@ -377,7 +462,12 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_ba2_gnrl_writer_free.argtypes = [_vp]
 
     lib.bethkit_ba2_gnrl_writer_add.restype = _i32
-    lib.bethkit_ba2_gnrl_writer_add.argtypes = [_vp, _c, ctypes.POINTER(_u8), _sz]
+    lib.bethkit_ba2_gnrl_writer_add.argtypes = [
+        _vp,
+        _c,
+        ctypes.POINTER(_u8),
+        _sz,
+    ]
 
     lib.bethkit_ba2_gnrl_writer_write_to.restype = _i32
     lib.bethkit_ba2_gnrl_writer_write_to.argtypes = [_vp, _c]
@@ -389,7 +479,12 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_ba2_dx10_writer_free.argtypes = [_vp]
 
     lib.bethkit_ba2_dx10_writer_add.restype = _i32
-    lib.bethkit_ba2_dx10_writer_add.argtypes = [_vp, _c, ctypes.POINTER(_u8), _sz]
+    lib.bethkit_ba2_dx10_writer_add.argtypes = [
+        _vp,
+        _c,
+        ctypes.POINTER(_u8),
+        _sz,
+    ]
 
     lib.bethkit_ba2_dx10_writer_write_to.restype = _i32
     lib.bethkit_ba2_dx10_writer_write_to.argtypes = [_vp, _c]
@@ -458,7 +553,12 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_string_table_get.argtypes = [_vp, _u32, ctypes.POINTER(_sz)]
 
     lib.bethkit_string_table_insert.restype = _i32
-    lib.bethkit_string_table_insert.argtypes = [_vp, _u32, ctypes.POINTER(_u8), _sz]
+    lib.bethkit_string_table_insert.argtypes = [
+        _vp,
+        _u32,
+        ctypes.POINTER(_u8),
+        _sz,
+    ]
 
     lib.bethkit_string_table_insert_new.restype = _i32
     lib.bethkit_string_table_insert_new.argtypes = [
@@ -477,6 +577,29 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_localization_set_new.restype = _vp
     lib.bethkit_localization_set_new.argtypes = []
 
+    lib.bethkit_localization_set_clone.restype = _vp
+    lib.bethkit_localization_set_clone.argtypes = [_vp]
+
+    lib.bethkit_localization_set_insert_new.restype = _i32
+    lib.bethkit_localization_set_insert_new.argtypes = [
+        _vp,
+        _i32,
+        ctypes.POINTER(_u8),
+        _sz,
+        ctypes.POINTER(_u32),
+    ]
+
+    lib.bethkit_localization_set_remove.restype = _i32
+    lib.bethkit_localization_set_remove.argtypes = [_vp, _i32, _u32]
+
+    lib.bethkit_localization_set_table_to_bytes.restype = _i32
+    lib.bethkit_localization_set_table_to_bytes.argtypes = [
+        _vp,
+        _i32,
+        ctypes.POINTER(_vp),
+        ctypes.POINTER(_sz),
+    ]
+
     lib.bethkit_localization_set_open.restype = _vp
     lib.bethkit_localization_set_open.argtypes = [_c, _c]
 
@@ -484,7 +607,12 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_localization_set_free.argtypes = [_vp]
 
     lib.bethkit_localization_set_get.restype = ctypes.POINTER(_u8)
-    lib.bethkit_localization_set_get.argtypes = [_vp, _i32, _u32, ctypes.POINTER(_sz)]
+    lib.bethkit_localization_set_get.argtypes = [
+        _vp,
+        _i32,
+        _u32,
+        ctypes.POINTER(_sz),
+    ]
 
     lib.bethkit_localization_set_set.restype = _i32
     lib.bethkit_localization_set_set.argtypes = [
@@ -563,6 +691,30 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_record_editor_finish.restype = _vp
     lib.bethkit_record_editor_finish.argtypes = [_vp]
 
+    lib.bethkit_semantic_snapshot_json.restype = _vp
+    lib.bethkit_semantic_snapshot_json.argtypes = [_vp, _vp, _bl]
+
+    lib.bethkit_semantic_strings_snapshot_json.restype = _vp
+    lib.bethkit_semantic_strings_snapshot_json.argtypes = [_vp, _vp, _bl]
+
+    lib.bethkit_record_editor_snapshot_json.restype = _vp
+    lib.bethkit_record_editor_snapshot_json.argtypes = [_vp]
+
+    lib.bethkit_record_editor_strings_snapshot_json.restype = _vp
+    lib.bethkit_record_editor_strings_snapshot_json.argtypes = [_vp]
+
+    lib.bethkit_record_editor_insert_json.restype = _i32
+    lib.bethkit_record_editor_insert_json.argtypes = [_vp, _c, _c]
+
+    lib.bethkit_record_editor_set_at_json.restype = _i32
+    lib.bethkit_record_editor_set_at_json.argtypes = [_vp, _c, _c]
+
+    lib.bethkit_record_editor_insert_at_json.restype = _i32
+    lib.bethkit_record_editor_insert_at_json.argtypes = [_vp, _c, _c]
+
+    lib.bethkit_record_editor_remove_at_json.restype = _i32
+    lib.bethkit_record_editor_remove_at_json.argtypes = [_vp, _c]
+
     lib.bethkit_record_view_new.restype = _vp
     lib.bethkit_record_view_new.argtypes = [_vp, _vp, _bl]
 
@@ -572,7 +724,9 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_record_view_field_count.restype = _sz
     lib.bethkit_record_view_field_count.argtypes = [_vp]
 
-    lib.bethkit_record_view_field_get.restype = ctypes.POINTER(BethkitNamedField)
+    lib.bethkit_record_view_field_get.restype = ctypes.POINTER(
+        BethkitNamedField
+    )
     lib.bethkit_record_view_field_get.argtypes = [_vp, _sz]
 
     lib.bethkit_field_entries_len.restype = _sz
@@ -584,7 +738,7 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_field_entries_free.restype = None
     lib.bethkit_field_entries_free.argtypes = [_vp]
     # NOTE: bethkit_field_entries_free is never called directly from Python.
-    # NOTE: The entries buffer is freed transitively by bethkit_record_view_free.
+    # NOTE: bethkit_record_view_free transitively frees the entries buffer.
     # NOTE: Declared here to keep the 1:1 FFI mapping intact.
 
     lib.bethkit_field_values_len.restype = _sz
@@ -612,7 +766,10 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_plugin_writer_write_to_file.argtypes = [_vp, _c]
 
     lib.bethkit_plugin_writer_write_to_bytes.restype = ctypes.POINTER(_u8)
-    lib.bethkit_plugin_writer_write_to_bytes.argtypes = [_vp, ctypes.POINTER(_sz)]
+    lib.bethkit_plugin_writer_write_to_bytes.argtypes = [
+        _vp,
+        ctypes.POINTER(_sz),
+    ]
 
     lib.bethkit_writable_group_new.restype = _vp
     lib.bethkit_writable_group_new.argtypes = [ctypes.POINTER(_u8), _i32]
@@ -627,7 +784,12 @@ def _declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_writable_group_add_group.argtypes = [_vp, _vp]
 
     lib.bethkit_writable_record_new.restype = _vp
-    lib.bethkit_writable_record_new.argtypes = [ctypes.POINTER(_u8), _u32, _u32, _u16]
+    lib.bethkit_writable_record_new.argtypes = [
+        ctypes.POINTER(_u8),
+        _u32,
+        _u32,
+        _u16,
+    ]
 
     lib.bethkit_writable_record_free.restype = None
     lib.bethkit_writable_record_free.argtypes = [_vp]

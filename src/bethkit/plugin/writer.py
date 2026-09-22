@@ -8,9 +8,9 @@ import ctypes
 from pathlib import Path
 from typing import Optional
 
-from .. import _ffi
-from .._error import BethkitClosedError, BethkitOwnershipError
-from ..enums import Game
+from bethkit import _ffi
+from bethkit._error import BethkitClosedError, BethkitOwnershipError
+from bethkit.enums import Game
 
 _HEDR_VERSION: dict[Game, float] = {
     Game.SKYRIM_SE: 1.7,
@@ -89,6 +89,18 @@ class WritableRecord:
         if not self.__ptr:
             raise BethkitClosedError("WritableRecord is closed or transferred")
         return self.__ptr
+
+    def _native_pointer(self) -> int:
+        """Returns a borrowed pointer without transferring this record.
+
+        Returns:
+            The pointer owned by this open record wrapper.
+
+        Raises:
+            BethkitClosedError: The record was closed or transferred.
+        """
+
+        return self.__check_open()
 
     def _transfer_ptr(self) -> int:
         """
@@ -199,12 +211,12 @@ class WritableRecord:
     def __repr__(self) -> str:
         """
         Returns:
-            str: Developer-friendly representation with native pointer.
+            str: Developer-friendly ownership state without native handles.
         """
 
         if not self.__ptr:
             return "<WritableRecord transferred>"
-        return f"<WritableRecord ptr=0x{self.__ptr:016X}>"
+        return "<WritableRecord open>"
 
 
 class WritableGroup:
@@ -334,8 +346,9 @@ class WritableGroup:
         """
 
         lib = _ffi.load_lib()
+        group_ptr = self.__check_open()
         rec_ptr = record._transfer_ptr()
-        if lib.bethkit_writable_group_add_record(self.__check_open(), rec_ptr) != 0:
+        if lib.bethkit_writable_group_add_record(group_ptr, rec_ptr) != 0:
             _ffi.raise_last_error(lib)
 
     def add_group(self, child: WritableGroup) -> None:
@@ -355,19 +368,22 @@ class WritableGroup:
         """
 
         lib = _ffi.load_lib()
+        group_ptr = self.__check_open()
+        if child is self:
+            raise ValueError("A writable group cannot contain itself.")
         child_ptr = child._transfer_ptr()
-        if lib.bethkit_writable_group_add_group(self.__check_open(), child_ptr) != 0:
+        if lib.bethkit_writable_group_add_group(group_ptr, child_ptr) != 0:
             _ffi.raise_last_error(lib)
 
     def __repr__(self) -> str:
         """
         Returns:
-            str: Developer-friendly representation with native pointer.
+            str: Developer-friendly ownership state without native handles.
         """
 
         if not self.__ptr:
             return "<WritableGroup transferred>"
-        return f"<WritableGroup ptr=0x{self.__ptr:016X}>"
+        return "<WritableGroup open>"
 
 
 class PluginWriter:
@@ -381,7 +397,9 @@ class PluginWriter:
 
     __ptr: int
 
-    def __init__(self, game: Game, hedr_version: Optional[float] = None) -> None:
+    def __init__(
+        self, game: Game, hedr_version: Optional[float] = None
+    ) -> None:
         """
         Args:
             game (Game): Target game; determines the correct format.
@@ -464,8 +482,9 @@ class PluginWriter:
         """
 
         lib = _ffi.load_lib()
+        writer_ptr = self.__check_open()
         grp_ptr = group._transfer_ptr()
-        if lib.bethkit_plugin_writer_add_group(self.__check_open(), grp_ptr) != 0:
+        if lib.bethkit_plugin_writer_add_group(writer_ptr, grp_ptr) != 0:
             _ffi.raise_last_error(lib)
 
     def write_to_file(self, path: Path) -> None:
@@ -482,9 +501,69 @@ class PluginWriter:
 
         lib = _ffi.load_lib()
         if (
-            lib.bethkit_plugin_writer_write_to_file(self.__check_open(), _ffi.enc(path))
+            lib.bethkit_plugin_writer_write_to_file(
+                self.__check_open(), _ffi.enc(path)
+            )
             != 0
         ):
+            _ffi.raise_last_error(lib)
+
+    def add_master(self, name: str) -> None:
+        """Appends a master dependency to the plugin header.
+
+        Args:
+            name: Master plugin filename, such as ``Skyrim.esm``.
+
+        Raises:
+            BethkitClosedError: The writer is closed.
+            BethkitNativeError: The native writer rejected the dependency.
+            ValueError: The filename contains a NUL character.
+        """
+
+        pointer = self.__check_open()
+        lib = _ffi.load_lib()
+        if lib.bethkit_plugin_writer_add_master(pointer, _ffi.senc(name)) != 0:
+            _ffi.raise_last_error(lib)
+
+    def set_description(self, description: str) -> None:
+        """Sets the plugin description in the TES4 header.
+
+        Args:
+            description: Description text to write.
+
+        Raises:
+            BethkitClosedError: The writer is closed.
+            BethkitNativeError: The native writer rejected the description.
+            ValueError: The description contains a NUL character.
+        """
+
+        pointer = self.__check_open()
+        lib = _ffi.load_lib()
+        if (
+            lib.bethkit_plugin_writer_set_description(
+                pointer, _ffi.senc(description)
+            )
+            != 0
+        ):
+            _ffi.raise_last_error(lib)
+
+    def set_localized(self, localized: bool) -> None:
+        """Sets whether translatable fields contain external string IDs.
+
+        This changes the header flag only. Callers must also supply matching
+        string IDs and save the corresponding localization tables.
+
+        Args:
+            localized: Whether the plugin uses external string tables.
+
+        Raises:
+            BethkitClosedError: The writer is closed.
+            BethkitNativeError: The native writer rejected the flag.
+        """
+
+        pointer = self.__check_open()
+        lib = _ffi.load_lib()
+        if lib.bethkit_plugin_writer_set_localized(pointer, localized) != 0:
             _ffi.raise_last_error(lib)
 
     def write_to_bytes(self) -> bytes:

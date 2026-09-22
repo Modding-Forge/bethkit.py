@@ -18,6 +18,7 @@ from ._loader import (
 )
 from ._types import (
     BethkitEnumVal,
+    BethkitFieldMetadata,
     BethkitFieldValue,
     BethkitFieldValuePayload,
     BethkitFlagsVal,
@@ -35,6 +36,7 @@ __all__ = [
     "raise_last_error",
     "senc",
     "BethkitEnumVal",
+    "BethkitFieldMetadata",
     "BethkitFieldValue",
     "BethkitFieldValuePayload",
     "BethkitFlagsVal",

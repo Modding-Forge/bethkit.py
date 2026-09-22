@@ -5,14 +5,17 @@ Copyright (c) Modding Forge
 from __future__ import annotations
 
 import ctypes
-from typing import Optional
+from typing import TYPE_CHECKING, Annotated, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from . import _ffi
-from ._error import BethkitClosedError
-from ._ffi import BethkitGlobalFormId
-from .enums import PluginKind
+from bethkit import _ffi
+from bethkit._error import BethkitClosedError
+from bethkit._ffi import BethkitGlobalFormId
+from bethkit.enums import PluginKind
+
+if TYPE_CHECKING:
+    from bethkit.plugin.plugin import Plugin
 
 
 class GlobalFormId(BaseModel, frozen=True):
@@ -24,7 +27,7 @@ class GlobalFormId(BaseModel, frozen=True):
     plugin_name: str
     """Name of the owning plugin (e.g. ``"Skyrim.esm"``)."""
 
-    object_id: int
+    object_id: Annotated[int, Field(strict=True, ge=0, le=0xFFFFFF)]
     """24-bit object identifier within *plugin_name*."""
 
     def __str__(self) -> str:
@@ -148,7 +151,12 @@ class LoadOrder:
 
         return _ffi.load_lib().bethkit_load_order_len(self.__check_open())
 
-    def resolve(self, form_id: int, source_plugin: str) -> GlobalFormId:
+    def resolve(
+        self,
+        form_id: int,
+        source_plugin: str,
+        plugin: Optional[Plugin] = None,
+    ) -> GlobalFormId:
         """
         Resolve a local FormID to a globally unique :class:`GlobalFormId`.
 
@@ -157,6 +165,8 @@ class LoadOrder:
                 record.
             source_plugin (str): Name of the plugin that contains the
                 FormID.
+            plugin: Open source plugin whose master list determines local
+                FormID ownership. Omit only for a source with no masters.
 
         Returns:
             GlobalFormId: The resolved global FormID.
@@ -165,20 +175,30 @@ class LoadOrder:
             BethkitClosedError: If this load order has already been closed.
             BethkitNativeError: If *form_id* or *source_plugin* cannot be
                 resolved.
+            ValueError: If the FormID is outside the unsigned 32-bit range.
         """
 
         lib = _ffi.load_lib()
         ptr = self.__check_open()
+        if not 0 <= form_id <= 0xFFFFFFFF:
+            raise ValueError("form_id must be an unsigned 32-bit integer.")
         out = BethkitGlobalFormId()
-        if (
-            lib.bethkit_load_order_resolve(
+        if plugin is None:
+            status = lib.bethkit_load_order_resolve(
                 ptr,
                 form_id,
                 _ffi.senc(source_plugin),
                 ctypes.byref(out),
             )
-            != 0
-        ):
+        else:
+            status = lib.bethkit_load_order_resolve_with_plugin(
+                ptr,
+                form_id,
+                _ffi.senc(source_plugin),
+                plugin._native_pointer(),
+                ctypes.byref(out),
+            )
+        if status != 0:
             _ffi.raise_last_error(lib)
         plugin_name_raw: Optional[bytes] = out.plugin_name
         plugin_name = plugin_name_raw.decode("utf-8") if plugin_name_raw else ""

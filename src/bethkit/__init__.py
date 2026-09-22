@@ -12,7 +12,7 @@ Quick example::
 
     from bethkit import Plugin, Game
 
-    with Plugin.open(Path("Ordinator - Perks of Skyrim.esp"), Game.SKYRIM_SE) as p:
+    with Plugin.open(Path("MyMod.esp"), Game.SKYRIM_SE) as p:
         for master in p.masters:
             print(master)
         for group in p:
@@ -30,8 +30,18 @@ from ._error import (
     BethkitNativeError,
     BethkitNotFoundError,
     BethkitOwnershipError,
+    RecordDecodeError,
+    SchemaMismatchError,
+    StringTableError,
+    UnsupportedEditError,
 )
-from .archive import Archive, ArchiveEntry, Ba2Dx10Writer, Ba2GnrlWriter, BsaWriter
+from .archive import (
+    Archive,
+    ArchiveEntry,
+    Ba2Dx10Writer,
+    Ba2GnrlWriter,
+    BsaWriter,
+)
 from .enums import (
     Ba2Version,
     BsaVersion,
@@ -46,12 +56,15 @@ from .plugin import (
     Group,
     Plugin,
     PluginCache,
+    PluginPatcher,
     PluginWriter,
     Record,
     SubRecord,
     WritableGroup,
     WritableRecord,
 )
+from .records import FieldAddress, FieldRef, RecordModel, RecordSnapshot
+from .records._wire import ValidationDiagnostic, ValidationReport
 from .schema import (
     Conflict,
     DecoderRequirement,
@@ -69,9 +82,31 @@ from .schema import (
     SemanticContext,
     TypedFormId,
 )
-from .strings import LocalizationSet, StringTable
+from .strings import (
+    LocalizationEditor,
+    LocalizationSet,
+    StringIdentity,
+    StringReference,
+    StringTable,
+    iter_strings,
+)
 
 __all__ = [
+    "FieldAddress",
+    "FieldRef",
+    "RecordModel",
+    "RecordSnapshot",
+    "RecordDecodeError",
+    "SchemaMismatchError",
+    "StringTableError",
+    "UnsupportedEditError",
+    "ValidationDiagnostic",
+    "ValidationReport",
+    "PluginPatcher",
+    "LocalizationEditor",
+    "StringIdentity",
+    "StringReference",
+    "iter_strings",
     # Exceptions
     "BethkitError",
     "BethkitLibraryNotFoundError",
