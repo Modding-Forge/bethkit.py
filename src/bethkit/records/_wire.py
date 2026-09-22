@@ -6,7 +6,7 @@ Copyright (c) Modding Forge
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal, Optional, TypeAlias
 
 import pydantic
 
@@ -124,7 +124,7 @@ class WireArray(pydantic.BaseModel, frozen=True):
     """Ordered elements."""
 
 
-WireValue = Annotated[
+WireValue: TypeAlias = Annotated[
     WireScalar | WireStruct | WireArray, pydantic.Field(discriminator="kind")
 ]
 

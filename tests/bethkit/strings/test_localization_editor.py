@@ -13,8 +13,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bethkit import Game, Plugin, StringFileKind, _error
-from bethkit.records import _wire
+from bethkit import Plugin, StringFileKind, _error
 from bethkit.schema import RecordEditor, SemanticContext
 from bethkit.strings import (
     LocalizationEditor,
@@ -26,193 +25,40 @@ if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
 
-def _snapshot(*, localized: bool = False) -> _wire.RecordSnapshot:
-    """Builds two same-text fields in different native grammar repetitions.
-
-    Args:
-        localized: Whether both fields share the same external string ID.
-
-    Returns:
-        A typed native-boundary snapshot with unambiguous field positions.
-    """
-
-    fields: list[_wire.WireField] = []
-    for index in range(2):
-        address = _wire.FieldAddress(
-            schema_payload_sha256="schema",
-            structure_hash="structure",
-            record_signature=(81, 85, 83, 84),
-            form_id=0x800,
-            subrecord_index=index,
-            subrecord_path="QUST/Stages/Stage/Entries/Entry/Log Entry",
-            repeat_scopes=(
-                _wire.RepeatScope(path="QUST/Stages/Stage", occurrence=index),
-                _wire.RepeatScope(
-                    path="QUST/Stages/Stage/Entries/Entry", occurrence=0
-                ),
-            ),
-        )
-        value = _wire.WireScalar(
-            kind="uint" if localized else "string",
-            address=address,
-            value=17 if localized else "Same text",
-            translatable=True,
-            string_table="dl_strings" if localized else None,
-        )
-        fields.append(
-            _wire.WireField(
-                name="Log Entry",
-                node_id=10,
-                path=address.subrecord_path,
-                span=_wire.ByteSpan(start=0, end=4),
-                origin="schema",
-                address=address,
-                value=value,
-            )
-        )
-    return _wire.RecordSnapshot(
-        format_version=1,
-        schema_payload_sha256="schema",
-        structure_hash="structure",
-        record_signature="QUST",
-        form_id=0x800,
-        fields=tuple(fields),
-    )
-
-
-class TestStringReferences:
-    """Covers identity, schema annotations, and lazy text enumeration."""
-
-    def test_equal_text_has_different_position_identity(
-        self, mock_lib: MagicMock
-    ) -> None:
-        """Does not identify repeated quest strings by their text content."""
-
-        # given
-        with Plugin(0x100) as plugin:
-            # when
-            result = list(references._from_snapshot(_snapshot(), plugin, None))
-
-        # then
-        assert result[0].text == result[1].text
-        assert result[0].identity != result[1].identity
-        assert result[0].address.repeat_scopes[0].occurrence == 0
-        assert result[1].address.repeat_scopes[0].occurrence == 1
-
-    def test_identity_survives_text_change_and_reload(
-        self, mock_lib: MagicMock
-    ) -> None:
-        """Keeps filename plus structural position stable across instances."""
-
-        # given
-        mock_lib.bethkit_plugin_open_from_bytes.return_value = 0x100
-        original = _snapshot()
-        first = original.fields[0]
-        changed = original.model_copy(
-            update={
-                "fields": (
-                    first.model_copy(
-                        update={
-                            "value": first.value.model_copy(
-                                update={"value": "A longer changed text"}
-                            )
-                        }
-                    ),
-                )
-            }
-        )
-        with Plugin.from_bytes(b"", Game.SKYRIM_SE, name="quest.esp") as source:
-            before = next(references._from_snapshot(original, source, None))
-        with Plugin.from_bytes(b"", Game.SKYRIM_SE, name="quest.esp") as reload:
-            # when
-            after = next(references._from_snapshot(changed, reload, None))
-
-        # then
-        assert before.identity == after.identity
-        assert before.text != after.text
-        assert before._source_token != after._source_token
-
-    def test_external_reference_without_tables_is_unresolved(
-        self, mock_lib: MagicMock
-    ) -> None:
-        """Retains identity and storage metadata without inventing text."""
-
-        # given
-        with Plugin(0x100) as plugin:
-            # when
-            result = next(
-                references._from_snapshot(
-                    _snapshot(localized=True), plugin, None
-                )
-            )
-
-        # then
-        assert result.text is None
-        assert result.storage == "external"
-        assert result.string_id == 17
-        assert result.table_kind == StringFileKind.DL_STRINGS
-
-    def test_supplied_tables_must_resolve_referenced_ids(
-        self, mock_lib: MagicMock, mocker: MockerFixture
-    ) -> None:
-        """Raises on incomplete tables instead of silently dropping strings."""
-
-        # given
-        tables = mocker.create_autospec(LocalizationSet, instance=True)
-        tables.get_str.return_value = None
-        with Plugin(0x100) as plugin:
-            # when / then
-            with pytest.raises(_error.StringTableError, match="absent"):
-                list(
-                    references._from_snapshot(
-                        _snapshot(localized=True), plugin, tables
-                    )
-                )
-
-    def test_plugin_iteration_is_lazy_and_filters_nontranslatable(
-        self, mock_lib: MagicMock, mocker: MockerFixture
-    ) -> None:
-        """Builds no semantic snapshots until strings are requested."""
-
-        # given
-        snapshot = _snapshot()
-        field = snapshot.fields[1]
-        snapshot = snapshot.model_copy(
-            update={
-                "fields": (
-                    snapshot.fields[0],
-                    field.model_copy(
-                        update={
-                            "value": field.value.model_copy(
-                                update={"translatable": False}
-                            )
-                        }
-                    ),
-                )
-            }
-        )
-        context = mocker.create_autospec(SemanticContext, instance=True)
-        context.strings_snapshot.return_value = snapshot
-        mock_lib.bethkit_plugin_is_localized.return_value = False
-        mock_lib.bethkit_plugin_group_count.return_value = 1
-        mock_lib.bethkit_plugin_group_get.return_value = 0x200
-        mock_lib.bethkit_group_child_count.return_value = 1
-        mock_lib.bethkit_group_child_is_record.return_value = True
-        mock_lib.bethkit_group_child_as_record.return_value = 0x300
-        with Plugin(0x100) as plugin:
-            iterator = plugin.iter_strings(context)
-            context.strings_snapshot.assert_not_called()
-
-            # when
-            result = list(iterator)
-
-        # then
-        assert len(result) == 1
-        context.strings_snapshot.assert_called_once()
+from ._fixtures import snapshot as _snapshot
 
 
 class TestLocalizationEditor:
     """Verifies isolated edits, rollback, and consistent publication."""
+
+    def test_cleanup_failure_does_not_skip_other_owned_handles(
+        self, mock_lib: MagicMock, mocker: MockerFixture
+    ) -> None:
+        """Attempts every cleanup without retrying a failed destructor."""
+
+        # given
+        mock_lib.bethkit_plugin_is_localized.return_value = True
+        context = mocker.create_autospec(SemanticContext, instance=True)
+        tables = mocker.create_autospec(LocalizationSet, instance=True)
+        working = mocker.create_autospec(LocalizationSet, instance=True)
+        tables.clone.return_value = working
+        working.close.side_effect = RuntimeError("cleanup failure")
+        native_patcher = mocker.MagicMock()
+        mocker.patch(
+            "bethkit.strings.editor.patcher.PluginPatcher",
+            return_value=native_patcher,
+        )
+        with Plugin._from_native(0x100) as plugin:
+            editor = LocalizationEditor(plugin, context, tables)
+
+            # when / then
+            with pytest.raises(RuntimeError, match="cleanup failure"):
+                editor.close()
+            editor.close()
+
+        working.close.assert_called_once()
+        native_patcher.close.assert_called_once()
+        tables.close.assert_not_called()
 
     def test_external_edit_allocates_copy_on_write_id(
         self, mock_lib: MagicMock, mocker: MockerFixture
@@ -232,7 +78,7 @@ class TestLocalizationEditor:
         tables.clone.return_value = working
         working.get_str.return_value = "Same text"
         working.insert_new.return_value = 41
-        with Plugin(0x100) as plugin:
+        with Plugin._from_native(0x100) as plugin:
             source_refs = list(
                 references._from_snapshot(
                     _snapshot(localized=True), plugin, None
@@ -273,7 +119,7 @@ class TestLocalizationEditor:
         tables.clone.return_value = working
         working.get_str.return_value = "Same text"
         working.insert_new.return_value = 41
-        with Plugin(0x100) as plugin:
+        with Plugin._from_native(0x100) as plugin:
             reference = next(
                 references._from_snapshot(
                     _snapshot(localized=True), plugin, None
@@ -294,7 +140,10 @@ class TestLocalizationEditor:
         mock_lib.bethkit_plugin_is_localized.return_value = False
         mock_lib.bethkit_plugin_patcher_new.return_value = 0x200
         context = mocker.create_autospec(SemanticContext, instance=True)
-        with Plugin(0x100) as source, Plugin(0x500) as other:
+        with (
+            Plugin._from_native(0x100) as source,
+            Plugin._from_native(0x500) as other,
+        ):
             foreign = next(references._from_snapshot(_snapshot(), other, None))
             with LocalizationEditor(source, context) as editor:
                 # when / then
@@ -325,7 +174,7 @@ class TestLocalizationEditor:
         tables.clone.return_value = working
         working.table_to_bytes.return_value = b"table"
         destination = tmp_path / "bundle"
-        with Plugin(0x100) as plugin:
+        with Plugin._from_native(0x100) as plugin:
             with LocalizationEditor(plugin, context, tables) as editor:
                 # when
                 result = editor.save_bundle(destination, "test.esp")
@@ -365,7 +214,7 @@ class TestLocalizationEditor:
             Path, "rename", side_effect=OSError("simulated publication error")
         )
         destination = tmp_path / "bundle"
-        with Plugin(0x100) as plugin:
+        with Plugin._from_native(0x100) as plugin:
             with LocalizationEditor(plugin, context) as editor:
                 # when
                 with pytest.raises(OSError, match="simulated"):
@@ -400,7 +249,7 @@ class TestLocalizationEditor:
         native_editor = mocker.create_autospec(RecordEditor, instance=True)
         native_editor.strings_snapshot.return_value = _snapshot()
         context.edit.return_value = native_editor
-        with Plugin(0x100) as plugin:
+        with Plugin._from_native(0x100) as plugin:
             reference = next(
                 references._from_snapshot(_snapshot(), plugin, None)
             )

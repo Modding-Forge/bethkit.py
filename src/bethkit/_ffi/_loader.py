@@ -10,29 +10,19 @@ import sys
 import threading
 from collections.abc import Callable
 from pathlib import Path
+from typing import Optional
 
-from ._types import (
-    BethkitFieldMetadata,
-    BethkitFieldValue,
-    BethkitGlobalFormId,
-    BethkitNamedField,
-    BethkitSlice,
+from . import (
+    _declare_archive,
+    _declare_core,
+    _declare_load_order,
+    _declare_plugin,
+    _declare_schema,
+    _declare_strings,
 )
 
-_lib: ctypes.CDLL | None = None
+_lib: Optional[ctypes.CDLL] = None
 _lib_lock: threading.Lock = threading.Lock()
-
-_c = ctypes.c_char_p
-_vp = ctypes.c_void_p
-_sz = ctypes.c_size_t
-_i32 = ctypes.c_int32
-_u8 = ctypes.c_uint8
-_u16 = ctypes.c_uint16
-_u32 = ctypes.c_uint32
-_u64 = ctypes.c_uint64
-_i64 = ctypes.c_int64
-_f32 = ctypes.c_float
-_bl = ctypes.c_bool
 
 
 def _find_library() -> Path:
@@ -79,7 +69,7 @@ def load_lib() -> ctypes.CDLL:
 
     Raises:
         BethkitLibraryNotFoundError: If the shared library file cannot
-            be found or loaded.
+            be found or loaded, or lacks the required ABI and symbols.
     """
 
     global _lib
@@ -142,7 +132,7 @@ def last_error(lib: ctypes.CDLL) -> str:
         str: The error text, or ``"unknown error"`` if none is set.
     """
 
-    msg: bytes | None = lib.bethkit_last_error()
+    msg: Optional[bytes] = lib.bethkit_last_error()
     if msg:
         return msg.decode("utf-8")
     return "unknown error"
@@ -185,6 +175,9 @@ def copy_and_free_str(
 
     Returns:
         str: The decoded UTF-8 string.
+
+    Raises:
+        UnicodeDecodeError: The buffer is not UTF-8; it is still freed.
     """
 
     try:
@@ -195,16 +188,20 @@ def copy_and_free_str(
 
 def enc(s: Path) -> bytes:
     """
-    Encode a filesystem path to a NUL-compatible UTF-8 bytes object.
+    Encode a filesystem path for a NUL-terminated native argument.
 
     Args:
         s (Path): Filesystem path to encode.
 
     Returns:
         bytes: UTF-8 encoded path bytes.
+
+    Raises:
+        ValueError: The path contains a NUL character.
+        UnicodeEncodeError: The path contains an unpaired surrogate.
     """
 
-    return str(s).encode("utf-8")
+    return senc(str(s))
 
 
 def senc(s: str) -> bytes:
@@ -216,6 +213,10 @@ def senc(s: str) -> bytes:
 
     Returns:
         bytes: UTF-8 encoded bytes.
+
+    Raises:
+        ValueError: The string contains a NUL character.
+        UnicodeEncodeError: The string contains an unpaired surrogate.
     """
 
     if "\x00" in s:
@@ -224,580 +225,18 @@ def senc(s: str) -> bytes:
 
 
 def _declare(lib: ctypes.CDLL) -> None:
-    """
-    Declare argtypes and restype for every exported bethkit function.
+    """Declares every required ABI symbol before publishing the singleton.
 
     Args:
-        lib (ctypes.CDLL): The freshly loaded native library handle.
+        lib: Loaded native library using the required ABI version.
+
+    Raises:
+        AttributeError: If any required ABI symbol is unavailable.
     """
 
-    lib.bethkit_last_error.restype = _c
-    lib.bethkit_last_error.argtypes = []
-
-    lib.bethkit_abi_version.restype = _u32
-    lib.bethkit_abi_version.argtypes = []
-
-    lib.bethkit_string_free.restype = None
-    lib.bethkit_string_free.argtypes = [_vp]
-
-    lib.bethkit_schema_package_manifest_json.restype = _vp
-    lib.bethkit_schema_package_manifest_json.argtypes = [_vp]
-    lib.bethkit_schema_package_graph_json.restype = _vp
-    lib.bethkit_schema_package_graph_json.argtypes = [_vp]
-
-    lib.bethkit_semantic_validate_json.restype = _vp
-    lib.bethkit_semantic_validate_json.argtypes = [_vp, _vp, _bl, _u32]
-
-    lib.bethkit_record_view_field_metadata.restype = _i32
-    lib.bethkit_record_view_field_metadata.argtypes = [
-        _vp,
-        _sz,
-        ctypes.POINTER(BethkitFieldMetadata),
-    ]
-    lib.bethkit_field_entries_metadata.restype = _i32
-    lib.bethkit_field_entries_metadata.argtypes = [
-        _vp,
-        _sz,
-        ctypes.POINTER(BethkitFieldMetadata),
-    ]
-
-    lib.bethkit_load_order_resolve_with_plugin.restype = _i32
-    lib.bethkit_load_order_resolve_with_plugin.argtypes = [
-        _vp,
-        _u32,
-        _c,
-        _vp,
-        ctypes.POINTER(BethkitGlobalFormId),
-    ]
-    lib.bethkit_archive_extract_status.restype = _i32
-    lib.bethkit_archive_extract_status.argtypes = [
-        _vp,
-        _c,
-        ctypes.POINTER(ctypes.POINTER(_u8)),
-        ctypes.POINTER(_sz),
-    ]
-    lib.bethkit_record_editor_id_status.restype = _i32
-    lib.bethkit_record_editor_id_status.argtypes = [_vp, ctypes.POINTER(_vp)]
-
-    lib.bethkit_plugin_patcher_new.restype = _vp
-    lib.bethkit_plugin_patcher_new.argtypes = [_vp]
-    lib.bethkit_plugin_patcher_free.restype = None
-    lib.bethkit_plugin_patcher_free.argtypes = [_vp]
-    lib.bethkit_plugin_patcher_replace_record.restype = _i32
-    lib.bethkit_plugin_patcher_replace_record.argtypes = [_vp, _u32, _vp]
-    lib.bethkit_plugin_patcher_write_to_bytes.restype = _i32
-    lib.bethkit_plugin_patcher_write_to_bytes.argtypes = [
-        _vp,
-        ctypes.POINTER(ctypes.POINTER(_u8)),
-        ctypes.POINTER(_sz),
-    ]
-    lib.bethkit_plugin_patcher_write_to_file.restype = _i32
-    lib.bethkit_plugin_patcher_write_to_file.argtypes = [_vp, _c]
-
-    lib.bethkit_plugin_writer_add_master.restype = _i32
-    lib.bethkit_plugin_writer_add_master.argtypes = [_vp, _c]
-    lib.bethkit_plugin_writer_set_description.restype = _i32
-    lib.bethkit_plugin_writer_set_description.argtypes = [_vp, _c]
-    lib.bethkit_plugin_writer_set_localized.restype = _i32
-    lib.bethkit_plugin_writer_set_localized.argtypes = [_vp, _bl]
-
-    lib.bethkit_bytes_free.restype = None
-    lib.bethkit_bytes_free.argtypes = [ctypes.POINTER(_u8), _sz]
-
-    lib.bethkit_plugin_open.restype = _vp
-    lib.bethkit_plugin_open.argtypes = [_c, _i32]
-
-    lib.bethkit_plugin_open_from_bytes.restype = _vp
-    lib.bethkit_plugin_open_from_bytes.argtypes = [
-        ctypes.POINTER(_u8),
-        _sz,
-        _i32,
-    ]
-
-    lib.bethkit_plugin_free.restype = None
-    lib.bethkit_plugin_free.argtypes = [_vp]
-
-    lib.bethkit_plugin_kind.restype = _i32
-    lib.bethkit_plugin_kind.argtypes = [_vp]
-
-    lib.bethkit_plugin_is_localized.restype = _bl
-    lib.bethkit_plugin_is_localized.argtypes = [_vp]
-
-    lib.bethkit_plugin_master_count.restype = _sz
-    lib.bethkit_plugin_master_count.argtypes = [_vp]
-
-    lib.bethkit_plugin_master_get.restype = _c
-    lib.bethkit_plugin_master_get.argtypes = [_vp, _sz]
-
-    lib.bethkit_plugin_description.restype = _c
-    lib.bethkit_plugin_description.argtypes = [_vp]
-
-    lib.bethkit_plugin_group_count.restype = _sz
-    lib.bethkit_plugin_group_count.argtypes = [_vp]
-
-    lib.bethkit_plugin_group_get.restype = _vp
-    lib.bethkit_plugin_group_get.argtypes = [_vp, _sz]
-
-    lib.bethkit_plugin_find_record.restype = _vp
-    lib.bethkit_plugin_find_record.argtypes = [_vp, _u32]
-
-    lib.bethkit_record_signature.restype = _i32
-    lib.bethkit_record_signature.argtypes = [_vp, ctypes.POINTER(_u8)]
-
-    lib.bethkit_record_form_id.restype = _u32
-    lib.bethkit_record_form_id.argtypes = [_vp]
-
-    lib.bethkit_record_flags.restype = _u32
-    lib.bethkit_record_flags.argtypes = [_vp]
-
-    lib.bethkit_record_form_version.restype = _u16
-    lib.bethkit_record_form_version.argtypes = [_vp]
-
-    lib.bethkit_record_editor_id.restype = _vp
-    lib.bethkit_record_editor_id.argtypes = [_vp]
-
-    lib.bethkit_record_editor_id_free.restype = None
-    lib.bethkit_record_editor_id_free.argtypes = [_vp]
-
-    lib.bethkit_record_subrecord_count.restype = _i64
-    lib.bethkit_record_subrecord_count.argtypes = [_vp]
-
-    lib.bethkit_record_subrecord_get.restype = _vp
-    lib.bethkit_record_subrecord_get.argtypes = [_vp, _sz]
-
-    lib.bethkit_record_subrecord_find.restype = _vp
-    lib.bethkit_record_subrecord_find.argtypes = [_vp, ctypes.POINTER(_u8)]
-
-    lib.bethkit_subrecord_signature.restype = _i32
-    lib.bethkit_subrecord_signature.argtypes = [_vp, ctypes.POINTER(_u8)]
-
-    lib.bethkit_subrecord_bytes.restype = BethkitSlice
-    lib.bethkit_subrecord_bytes.argtypes = [_vp]
-
-    lib.bethkit_subrecord_as_u8.restype = _i32
-    lib.bethkit_subrecord_as_u8.argtypes = [_vp, ctypes.POINTER(_u8)]
-
-    lib.bethkit_subrecord_as_u16.restype = _i32
-    lib.bethkit_subrecord_as_u16.argtypes = [_vp, ctypes.POINTER(_u16)]
-
-    lib.bethkit_subrecord_as_u32.restype = _i32
-    lib.bethkit_subrecord_as_u32.argtypes = [_vp, ctypes.POINTER(_u32)]
-
-    lib.bethkit_subrecord_as_f32.restype = _i32
-    lib.bethkit_subrecord_as_f32.argtypes = [_vp, ctypes.POINTER(_f32)]
-
-    lib.bethkit_subrecord_as_zstring.restype = _vp
-    lib.bethkit_subrecord_as_zstring.argtypes = [_vp]
-
-    lib.bethkit_zstring_free.restype = None
-    lib.bethkit_zstring_free.argtypes = [_vp]
-
-    lib.bethkit_group_type.restype = _i32
-    lib.bethkit_group_type.argtypes = [_vp]
-
-    lib.bethkit_group_child_count.restype = _sz
-    lib.bethkit_group_child_count.argtypes = [_vp]
-
-    lib.bethkit_group_child_is_record.restype = _bl
-    lib.bethkit_group_child_is_record.argtypes = [_vp, _sz]
-
-    lib.bethkit_group_child_as_record.restype = _vp
-    lib.bethkit_group_child_as_record.argtypes = [_vp, _sz]
-
-    lib.bethkit_group_child_as_group.restype = _vp
-    lib.bethkit_group_child_as_group.argtypes = [_vp, _sz]
-
-    lib.bethkit_archive_open.restype = _vp
-    lib.bethkit_archive_open.argtypes = [_c]
-
-    lib.bethkit_archive_free.restype = None
-    lib.bethkit_archive_free.argtypes = [_vp]
-
-    lib.bethkit_archive_format_name.restype = _c
-    lib.bethkit_archive_format_name.argtypes = [_vp]
-
-    lib.bethkit_archive_file_count.restype = _sz
-    lib.bethkit_archive_file_count.argtypes = [_vp]
-
-    lib.bethkit_archive_entry_get.restype = _vp
-    lib.bethkit_archive_entry_get.argtypes = [_vp, _sz]
-
-    lib.bethkit_archive_entry_path.restype = _vp
-    lib.bethkit_archive_entry_path.argtypes = [_vp]
-
-    lib.bethkit_archive_entry_path_free.restype = None
-    lib.bethkit_archive_entry_path_free.argtypes = [_vp]
-
-    lib.bethkit_archive_entry_uncompressed_size.restype = _u32
-    lib.bethkit_archive_entry_uncompressed_size.argtypes = [_vp]
-
-    lib.bethkit_archive_extract.restype = ctypes.POINTER(_u8)
-    lib.bethkit_archive_extract.argtypes = [_vp, _c, ctypes.POINTER(_sz)]
-
-    lib.bethkit_archive_extract_to_file.restype = _i32
-    lib.bethkit_archive_extract_to_file.argtypes = [_vp, _c, _c]
-
-    lib.bethkit_bsa_writer_new.restype = _vp
-    lib.bethkit_bsa_writer_new.argtypes = [_i32]
-
-    lib.bethkit_bsa_writer_free.restype = None
-    lib.bethkit_bsa_writer_free.argtypes = [_vp]
-
-    lib.bethkit_bsa_writer_set_compress.restype = _i32
-    lib.bethkit_bsa_writer_set_compress.argtypes = [_vp, _bl]
-
-    lib.bethkit_bsa_writer_set_embed_names.restype = _i32
-    lib.bethkit_bsa_writer_set_embed_names.argtypes = [_vp, _bl]
-
-    lib.bethkit_bsa_writer_add.restype = _i32
-    lib.bethkit_bsa_writer_add.argtypes = [_vp, _c, ctypes.POINTER(_u8), _sz]
-
-    lib.bethkit_bsa_writer_write_to.restype = _i32
-    lib.bethkit_bsa_writer_write_to.argtypes = [_vp, _c]
-
-    lib.bethkit_ba2_gnrl_writer_new.restype = _vp
-    lib.bethkit_ba2_gnrl_writer_new.argtypes = [_i32]
-
-    lib.bethkit_ba2_gnrl_writer_free.restype = None
-    lib.bethkit_ba2_gnrl_writer_free.argtypes = [_vp]
-
-    lib.bethkit_ba2_gnrl_writer_add.restype = _i32
-    lib.bethkit_ba2_gnrl_writer_add.argtypes = [
-        _vp,
-        _c,
-        ctypes.POINTER(_u8),
-        _sz,
-    ]
-
-    lib.bethkit_ba2_gnrl_writer_write_to.restype = _i32
-    lib.bethkit_ba2_gnrl_writer_write_to.argtypes = [_vp, _c]
-
-    lib.bethkit_ba2_dx10_writer_new.restype = _vp
-    lib.bethkit_ba2_dx10_writer_new.argtypes = [_i32]
-
-    lib.bethkit_ba2_dx10_writer_free.restype = None
-    lib.bethkit_ba2_dx10_writer_free.argtypes = [_vp]
-
-    lib.bethkit_ba2_dx10_writer_add.restype = _i32
-    lib.bethkit_ba2_dx10_writer_add.argtypes = [
-        _vp,
-        _c,
-        ctypes.POINTER(_u8),
-        _sz,
-    ]
-
-    lib.bethkit_ba2_dx10_writer_write_to.restype = _i32
-    lib.bethkit_ba2_dx10_writer_write_to.argtypes = [_vp, _c]
-
-    lib.bethkit_load_order_new.restype = _vp
-    lib.bethkit_load_order_new.argtypes = []
-
-    lib.bethkit_load_order_free.restype = None
-    lib.bethkit_load_order_free.argtypes = [_vp]
-
-    lib.bethkit_load_order_push.restype = _i32
-    lib.bethkit_load_order_push.argtypes = [_vp, _c, _i32]
-
-    lib.bethkit_load_order_len.restype = _sz
-    lib.bethkit_load_order_len.argtypes = [_vp]
-
-    lib.bethkit_load_order_resolve.restype = _i32
-    lib.bethkit_load_order_resolve.argtypes = [
-        _vp,
-        _u32,
-        _c,
-        ctypes.POINTER(BethkitGlobalFormId),
-    ]
-
-    lib.bethkit_plugin_cache_new.restype = _vp
-    lib.bethkit_plugin_cache_new.argtypes = []
-
-    lib.bethkit_plugin_cache_free.restype = None
-    lib.bethkit_plugin_cache_free.argtypes = [_vp]
-
-    lib.bethkit_plugin_cache_add.restype = _i32
-    lib.bethkit_plugin_cache_add.argtypes = [_vp, _c, _vp]
-
-    lib.bethkit_plugin_cache_len.restype = _sz
-    lib.bethkit_plugin_cache_len.argtypes = [_vp]
-
-    lib.bethkit_plugin_cache_record_count.restype = _sz
-    lib.bethkit_plugin_cache_record_count.argtypes = [_vp]
-
-    lib.bethkit_plugin_cache_resolve.restype = _vp
-    lib.bethkit_plugin_cache_resolve.argtypes = [_vp, _c, _u32]
-
-    lib.bethkit_plugin_cache_find_by_editor_id.restype = _vp
-    lib.bethkit_plugin_cache_find_by_editor_id.argtypes = [
-        _vp,
-        _c,
-        ctypes.POINTER(BethkitGlobalFormId),
-    ]
-
-    lib.bethkit_string_table_new.restype = _vp
-    lib.bethkit_string_table_new.argtypes = [_i32]
-
-    lib.bethkit_string_table_open.restype = _vp
-    lib.bethkit_string_table_open.argtypes = [_c]
-
-    lib.bethkit_string_table_free.restype = None
-    lib.bethkit_string_table_free.argtypes = [_vp]
-
-    lib.bethkit_string_table_kind.restype = _i32
-    lib.bethkit_string_table_kind.argtypes = [_vp]
-
-    lib.bethkit_string_table_len.restype = _sz
-    lib.bethkit_string_table_len.argtypes = [_vp]
-
-    lib.bethkit_string_table_get.restype = ctypes.POINTER(_u8)
-    lib.bethkit_string_table_get.argtypes = [_vp, _u32, ctypes.POINTER(_sz)]
-
-    lib.bethkit_string_table_insert.restype = _i32
-    lib.bethkit_string_table_insert.argtypes = [
-        _vp,
-        _u32,
-        ctypes.POINTER(_u8),
-        _sz,
-    ]
-
-    lib.bethkit_string_table_insert_new.restype = _i32
-    lib.bethkit_string_table_insert_new.argtypes = [
-        _vp,
-        ctypes.POINTER(_u8),
-        _sz,
-        ctypes.POINTER(_u32),
-    ]
-
-    lib.bethkit_string_table_remove.restype = _bl
-    lib.bethkit_string_table_remove.argtypes = [_vp, _u32]
-
-    lib.bethkit_string_table_write_to_file.restype = _i32
-    lib.bethkit_string_table_write_to_file.argtypes = [_vp, _c]
-
-    lib.bethkit_localization_set_new.restype = _vp
-    lib.bethkit_localization_set_new.argtypes = []
-
-    lib.bethkit_localization_set_clone.restype = _vp
-    lib.bethkit_localization_set_clone.argtypes = [_vp]
-
-    lib.bethkit_localization_set_insert_new.restype = _i32
-    lib.bethkit_localization_set_insert_new.argtypes = [
-        _vp,
-        _i32,
-        ctypes.POINTER(_u8),
-        _sz,
-        ctypes.POINTER(_u32),
-    ]
-
-    lib.bethkit_localization_set_remove.restype = _i32
-    lib.bethkit_localization_set_remove.argtypes = [_vp, _i32, _u32]
-
-    lib.bethkit_localization_set_table_to_bytes.restype = _i32
-    lib.bethkit_localization_set_table_to_bytes.argtypes = [
-        _vp,
-        _i32,
-        ctypes.POINTER(_vp),
-        ctypes.POINTER(_sz),
-    ]
-
-    lib.bethkit_localization_set_open.restype = _vp
-    lib.bethkit_localization_set_open.argtypes = [_c, _c]
-
-    lib.bethkit_localization_set_free.restype = None
-    lib.bethkit_localization_set_free.argtypes = [_vp]
-
-    lib.bethkit_localization_set_get.restype = ctypes.POINTER(_u8)
-    lib.bethkit_localization_set_get.argtypes = [
-        _vp,
-        _i32,
-        _u32,
-        ctypes.POINTER(_sz),
-    ]
-
-    lib.bethkit_localization_set_set.restype = _i32
-    lib.bethkit_localization_set_set.argtypes = [
-        _vp,
-        _i32,
-        _u32,
-        ctypes.POINTER(_u8),
-        _sz,
-    ]
-
-    lib.bethkit_localization_set_write.restype = _i32
-    lib.bethkit_localization_set_write.argtypes = [_vp, _c, _c]
-
-    lib.bethkit_schema_catalog_embedded.restype = _vp
-    lib.bethkit_schema_catalog_embedded.argtypes = []
-
-    lib.bethkit_schema_catalog_open.restype = _vp
-    lib.bethkit_schema_catalog_open.argtypes = [_c]
-
-    lib.bethkit_schema_catalog_free.restype = None
-    lib.bethkit_schema_catalog_free.argtypes = [_vp]
-
-    lib.bethkit_schema_catalog_package.restype = _vp
-    lib.bethkit_schema_catalog_package.argtypes = [_vp, _i32]
-
-    lib.bethkit_schema_package_open.restype = _vp
-    lib.bethkit_schema_package_open.argtypes = [_c]
-
-    lib.bethkit_schema_package_free.restype = None
-    lib.bethkit_schema_package_free.argtypes = [_vp]
-
-    lib.bethkit_semantic_context_new.restype = _vp
-    lib.bethkit_semantic_context_new.argtypes = [_vp]
-
-    lib.bethkit_semantic_context_free.restype = None
-    lib.bethkit_semantic_context_free.argtypes = [_vp]
-
-    lib.bethkit_record_editor_new.restype = _vp
-    lib.bethkit_record_editor_new.argtypes = [_vp, _vp, _bl]
-
-    lib.bethkit_record_editor_free.restype = None
-    lib.bethkit_record_editor_free.argtypes = [_vp]
-
-    lib.bethkit_record_editor_set_i64.restype = _i32
-    lib.bethkit_record_editor_set_i64.argtypes = [_vp, _c, _sz, _i64]
-
-    lib.bethkit_record_editor_set_u64.restype = _i32
-    lib.bethkit_record_editor_set_u64.argtypes = [_vp, _c, _sz, _u64]
-
-    lib.bethkit_record_editor_set_f64.restype = _i32
-    lib.bethkit_record_editor_set_f64.argtypes = [
-        _vp,
-        _c,
-        _sz,
-        ctypes.c_double,
-    ]
-
-    lib.bethkit_record_editor_set_form_id.restype = _i32
-    lib.bethkit_record_editor_set_form_id.argtypes = [_vp, _c, _sz, _u32]
-
-    lib.bethkit_record_editor_set_string.restype = _i32
-    lib.bethkit_record_editor_set_string.argtypes = [_vp, _c, _sz, _c]
-
-    lib.bethkit_record_editor_set_bytes.restype = _i32
-    lib.bethkit_record_editor_set_bytes.argtypes = [
-        _vp,
-        _c,
-        _sz,
-        ctypes.POINTER(_u8),
-        _sz,
-    ]
-
-    lib.bethkit_record_editor_remove.restype = _i32
-    lib.bethkit_record_editor_remove.argtypes = [_vp, _c, _sz]
-
-    lib.bethkit_record_editor_finish.restype = _vp
-    lib.bethkit_record_editor_finish.argtypes = [_vp]
-
-    lib.bethkit_semantic_snapshot_json.restype = _vp
-    lib.bethkit_semantic_snapshot_json.argtypes = [_vp, _vp, _bl]
-
-    lib.bethkit_semantic_strings_snapshot_json.restype = _vp
-    lib.bethkit_semantic_strings_snapshot_json.argtypes = [_vp, _vp, _bl]
-
-    lib.bethkit_record_editor_snapshot_json.restype = _vp
-    lib.bethkit_record_editor_snapshot_json.argtypes = [_vp]
-
-    lib.bethkit_record_editor_strings_snapshot_json.restype = _vp
-    lib.bethkit_record_editor_strings_snapshot_json.argtypes = [_vp]
-
-    lib.bethkit_record_editor_insert_json.restype = _i32
-    lib.bethkit_record_editor_insert_json.argtypes = [_vp, _c, _c]
-
-    lib.bethkit_record_editor_set_at_json.restype = _i32
-    lib.bethkit_record_editor_set_at_json.argtypes = [_vp, _c, _c]
-
-    lib.bethkit_record_editor_insert_at_json.restype = _i32
-    lib.bethkit_record_editor_insert_at_json.argtypes = [_vp, _c, _c]
-
-    lib.bethkit_record_editor_remove_at_json.restype = _i32
-    lib.bethkit_record_editor_remove_at_json.argtypes = [_vp, _c]
-
-    lib.bethkit_record_view_new.restype = _vp
-    lib.bethkit_record_view_new.argtypes = [_vp, _vp, _bl]
-
-    lib.bethkit_record_view_free.restype = None
-    lib.bethkit_record_view_free.argtypes = [_vp]
-
-    lib.bethkit_record_view_field_count.restype = _sz
-    lib.bethkit_record_view_field_count.argtypes = [_vp]
-
-    lib.bethkit_record_view_field_get.restype = ctypes.POINTER(
-        BethkitNamedField
-    )
-    lib.bethkit_record_view_field_get.argtypes = [_vp, _sz]
-
-    lib.bethkit_field_entries_len.restype = _sz
-    lib.bethkit_field_entries_len.argtypes = [_vp]
-
-    lib.bethkit_field_entries_get.restype = ctypes.POINTER(BethkitNamedField)
-    lib.bethkit_field_entries_get.argtypes = [_vp, _sz]
-
-    lib.bethkit_field_entries_free.restype = None
-    lib.bethkit_field_entries_free.argtypes = [_vp]
-    # NOTE: bethkit_field_entries_free is never called directly from Python.
-    # NOTE: bethkit_record_view_free transitively frees the entries buffer.
-    # NOTE: Declared here to keep the 1:1 FFI mapping intact.
-
-    lib.bethkit_field_values_len.restype = _sz
-    lib.bethkit_field_values_len.argtypes = [_vp]
-
-    lib.bethkit_field_values_get.restype = ctypes.POINTER(BethkitFieldValue)
-    lib.bethkit_field_values_get.argtypes = [_vp, _sz]
-
-    lib.bethkit_field_values_free.restype = None
-    lib.bethkit_field_values_free.argtypes = [_vp]
-    # NOTE: bethkit_field_values_free is never called directly from Python.
-    # NOTE: The values buffer is freed transitively by bethkit_record_view_free.
-    # NOTE: Declared here to keep the 1:1 FFI mapping intact.
-
-    lib.bethkit_plugin_writer_new.restype = _vp
-    lib.bethkit_plugin_writer_new.argtypes = [_i32, _f32]
-
-    lib.bethkit_plugin_writer_free.restype = None
-    lib.bethkit_plugin_writer_free.argtypes = [_vp]
-
-    lib.bethkit_plugin_writer_add_group.restype = _i32
-    lib.bethkit_plugin_writer_add_group.argtypes = [_vp, _vp]
-
-    lib.bethkit_plugin_writer_write_to_file.restype = _i32
-    lib.bethkit_plugin_writer_write_to_file.argtypes = [_vp, _c]
-
-    lib.bethkit_plugin_writer_write_to_bytes.restype = ctypes.POINTER(_u8)
-    lib.bethkit_plugin_writer_write_to_bytes.argtypes = [
-        _vp,
-        ctypes.POINTER(_sz),
-    ]
-
-    lib.bethkit_writable_group_new.restype = _vp
-    lib.bethkit_writable_group_new.argtypes = [ctypes.POINTER(_u8), _i32]
-
-    lib.bethkit_writable_group_free.restype = None
-    lib.bethkit_writable_group_free.argtypes = [_vp]
-
-    lib.bethkit_writable_group_add_record.restype = _i32
-    lib.bethkit_writable_group_add_record.argtypes = [_vp, _vp]
-
-    lib.bethkit_writable_group_add_group.restype = _i32
-    lib.bethkit_writable_group_add_group.argtypes = [_vp, _vp]
-
-    lib.bethkit_writable_record_new.restype = _vp
-    lib.bethkit_writable_record_new.argtypes = [
-        ctypes.POINTER(_u8),
-        _u32,
-        _u32,
-        _u16,
-    ]
-
-    lib.bethkit_writable_record_free.restype = None
-    lib.bethkit_writable_record_free.argtypes = [_vp]
-
-    lib.bethkit_writable_record_add_subrecord.restype = _i32
-    lib.bethkit_writable_record_add_subrecord.argtypes = [
-        _vp,
-        ctypes.POINTER(_u8),
-        ctypes.POINTER(_u8),
-        _sz,
-    ]
+    _declare_core.declare(lib)
+    _declare_plugin.declare(lib)
+    _declare_archive.declare(lib)
+    _declare_strings.declare(lib)
+    _declare_schema.declare(lib)
+    _declare_load_order.declare(lib)

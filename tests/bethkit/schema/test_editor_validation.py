@@ -23,7 +23,7 @@ class TestEditorValidation:
             value: Out-of-range signed or unsigned integer.
         """
 
-        with RecordEditor(505) as editor:
+        with RecordEditor._from_native(505) as editor:
             with pytest.raises(ValueError, match="64-bit"):
                 editor.set("test", value)
         mock_lib.bethkit_record_editor_set_i64.assert_not_called()
@@ -38,7 +38,7 @@ class TestEditorValidation:
             value: Out-of-range or boolean record identity.
         """
 
-        with RecordEditor(505) as editor:
+        with RecordEditor._from_native(505) as editor:
             with pytest.raises(ValueError, match="32-bit"):
                 editor.set_form_id("test", value)
         mock_lib.bethkit_record_editor_set_form_id.assert_not_called()
@@ -50,7 +50,7 @@ class TestEditorValidation:
             mock_lib: Patched native functions.
         """
 
-        with RecordEditor(505) as editor:
+        with RecordEditor._from_native(505) as editor:
             with pytest.raises(ValueError, match="nonnegative"):
                 editor.set("test", 1, occurrence=-1)
             with pytest.raises(ValueError, match="nonnegative"):

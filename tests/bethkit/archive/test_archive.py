@@ -13,12 +13,8 @@ import pytest
 from bethkit import (
     Archive,
     ArchiveEntry,
-    Ba2GnrlWriter,
-    Ba2Version,
     BethkitClosedError,
     BethkitNativeError,
-    BsaVersion,
-    BsaWriter,
 )
 
 if TYPE_CHECKING:
@@ -38,7 +34,7 @@ class TestArchive:
         mock_lib.bethkit_last_error.return_value = b"an earlier failure"
 
         # when / then
-        with Archive(0x100) as archive:
+        with Archive._from_native(0x100) as archive:
             assert archive.extract("missing.txt") is None
         mock_lib.bethkit_last_error.assert_not_called()
         mock_lib.bethkit_bytes_free.assert_not_called()
@@ -53,7 +49,7 @@ class TestArchive:
         mock_lib.bethkit_last_error.return_value = b"corrupt compressed data"
 
         # when / then
-        with Archive(0x100) as archive:
+        with Archive._from_native(0x100) as archive:
             with pytest.raises(BethkitNativeError, match="corrupt"):
                 archive.extract("damaged.txt")
         mock_lib.bethkit_bytes_free.assert_not_called()
@@ -217,8 +213,7 @@ class TestArchive:
     def test_extract_to_file_calls_native(
         self, mocker: MockerFixture, tmp_path: Path
     ) -> None:
-        """Tests that extract_to_file() delegates to
-        bethkit_archive_extract_to_file."""
+        """Tests that file extraction delegates to the native writer."""
 
         # given
         mock_lib: MagicMock = mocker.MagicMock()
@@ -268,260 +263,3 @@ class TestArchive:
         # then
         assert len(entries) == 1
         assert isinstance(entries[0], ArchiveEntry)
-
-
-class TestArchiveEntry:
-    """Tests ``bethkit.archive.archive.ArchiveEntry``."""
-
-    def test_path_returns_empty_string_on_null(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
-        """Tests that ArchiveEntry.path returns '' when FFI returns null."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_archive_open.return_value = 0xDEAD
-        mock_lib.bethkit_archive_entry_path.return_value = 0
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-
-        # given — construct entry manually with a fake ptr
-        with Archive.open(tmp_path / "x.bsa") as archive:
-            entry = ArchiveEntry(0xBEEF, archive)
-            result = entry.path
-
-        # then
-        assert result == ""
-
-    def test_uncompressed_size_delegates_to_native(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
-        """Tests that uncompressed_size reads from
-        bethkit_archive_entry_uncompressed_size."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_archive_open.return_value = 0xDEAD
-        mock_lib.bethkit_archive_entry_uncompressed_size.return_value = 1024
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-
-        with Archive.open(tmp_path / "x.bsa") as archive:
-            entry = ArchiveEntry(0xBEEF, archive)
-
-            # when
-            size = entry.uncompressed_size
-
-        # then
-        assert size == 1024
-
-
-class TestBsaWriter:
-    """Tests ``bethkit.archive.archive.BsaWriter``."""
-
-    def test_constructor_calls_native(self, mocker: MockerFixture) -> None:
-        """Wraps a newly created native BSA writer."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_bsa_writer_new.return_value = 0xCCCC
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-
-        # when
-        writer: BsaWriter = BsaWriter(BsaVersion.SSE)
-
-        # then
-        assert isinstance(writer, BsaWriter)
-        writer.close()
-
-    def test_context_manager_frees_on_exit(self, mocker: MockerFixture) -> None:
-        """Tests that __exit__ calls bethkit_bsa_writer_free."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_bsa_writer_new.return_value = 0xCCCC
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-
-        # when
-        with BsaWriter(BsaVersion.SSE):
-            pass
-
-        # then
-        mock_lib.bethkit_bsa_writer_free.assert_called_once_with(0xCCCC)
-
-    def test_close_is_idempotent(self, mocker: MockerFixture) -> None:
-        """Tests that close() twice does not double-free."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_bsa_writer_new.return_value = 0xCCCC
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-        writer: BsaWriter = BsaWriter(BsaVersion.SSE)
-
-        # when
-        writer.close()
-        writer.close()
-
-        # then
-        mock_lib.bethkit_bsa_writer_free.assert_called_once()
-
-    def test_closed_writer_raises_on_add(self, mocker: MockerFixture) -> None:
-        """Tests that add() raises BethkitClosedError after close()."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_bsa_writer_new.return_value = 0xCCCC
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-        writer: BsaWriter = BsaWriter(BsaVersion.SSE)
-        writer.close()
-
-        # when / then
-        with pytest.raises(BethkitClosedError):
-            writer.add("meshes/foo.nif", b"\x00" * 16)
-
-    def test_set_compress_calls_native(self, mocker: MockerFixture) -> None:
-        """Delegates compression settings to the native writer."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_bsa_writer_new.return_value = 0xCCCC
-        mock_lib.bethkit_bsa_writer_set_compress.return_value = 0
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-
-        # when
-        with BsaWriter(BsaVersion.SSE) as writer:
-            writer.set_compress(True)
-
-        # then
-        mock_lib.bethkit_bsa_writer_set_compress.assert_called_once()
-
-    def test_set_embed_names_calls_native(self, mocker: MockerFixture) -> None:
-        """Tests that set_embed_names() delegates to
-        bethkit_bsa_writer_set_embed_names."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_bsa_writer_new.return_value = 0xCCCC
-        mock_lib.bethkit_bsa_writer_set_embed_names.return_value = 0
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-
-        # when
-        with BsaWriter(BsaVersion.SSE) as writer:
-            writer.set_embed_names(True)
-
-        # then
-        mock_lib.bethkit_bsa_writer_set_embed_names.assert_called_once()
-
-    def test_add_calls_native(self, mocker: MockerFixture) -> None:
-        """Tests that add() delegates to bethkit_bsa_writer_add."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_bsa_writer_new.return_value = 0xCCCC
-        mock_lib.bethkit_bsa_writer_add.return_value = 0
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-
-        # when
-        with BsaWriter(BsaVersion.SSE) as writer:
-            writer.add("meshes/foo.nif", b"\xde\xad\xbe\xef")
-
-        # then
-        mock_lib.bethkit_bsa_writer_add.assert_called_once()
-
-    def test_write_to_calls_native(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
-        """Tests that write_to() delegates to bethkit_bsa_writer_write_to."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_bsa_writer_new.return_value = 0xCCCC
-        mock_lib.bethkit_bsa_writer_write_to.return_value = 0
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-
-        # when
-        with BsaWriter(BsaVersion.SSE) as writer:
-            writer.write_to(tmp_path / "out.bsa")
-
-        # then
-        mock_lib.bethkit_bsa_writer_write_to.assert_called_once()
-
-
-class TestBa2GnrlWriter:
-    """Tests ``bethkit.archive.archive.Ba2GnrlWriter``."""
-
-    def test_constructor_calls_native(self, mocker: MockerFixture) -> None:
-        """Wraps a newly created native BA2 writer."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_ba2_gnrl_writer_new.return_value = 0xDDDD
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-
-        # when
-        writer: Ba2GnrlWriter = Ba2GnrlWriter(Ba2Version.V1)
-
-        # then
-        assert isinstance(writer, Ba2GnrlWriter)
-        writer.close()
-
-    def test_context_manager_frees_on_exit(self, mocker: MockerFixture) -> None:
-        """Tests that __exit__ calls bethkit_ba2_gnrl_writer_free."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_ba2_gnrl_writer_new.return_value = 0xDDDD
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-
-        # when
-        with Ba2GnrlWriter(Ba2Version.V1):
-            pass
-
-        # then
-        mock_lib.bethkit_ba2_gnrl_writer_free.assert_called_once_with(0xDDDD)
-
-    def test_closed_writer_raises_on_add(self, mocker: MockerFixture) -> None:
-        """Tests that add() raises BethkitClosedError after close()."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_ba2_gnrl_writer_new.return_value = 0xDDDD
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-        writer: Ba2GnrlWriter = Ba2GnrlWriter(Ba2Version.V1)
-        writer.close()
-
-        # when / then
-        with pytest.raises(BethkitClosedError):
-            writer.add("meshes/foo.nif", b"\x00" * 16)
-
-    def test_add_calls_native(self, mocker: MockerFixture) -> None:
-        """Tests that add() delegates to bethkit_ba2_gnrl_writer_add."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_ba2_gnrl_writer_new.return_value = 0xDDDD
-        mock_lib.bethkit_ba2_gnrl_writer_add.return_value = 0
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-
-        # when
-        with Ba2GnrlWriter(Ba2Version.V1) as writer:
-            writer.add("sound/fx/boom.wav", b"\xff" * 8)
-
-        # then
-        mock_lib.bethkit_ba2_gnrl_writer_add.assert_called_once()
-
-    def test_write_to_calls_native(
-        self, mocker: MockerFixture, tmp_path: Path
-    ) -> None:
-        """Delegates writing to the native BA2 writer."""
-
-        # given
-        mock_lib: MagicMock = mocker.MagicMock()
-        mock_lib.bethkit_ba2_gnrl_writer_new.return_value = 0xDDDD
-        mock_lib.bethkit_ba2_gnrl_writer_write_to.return_value = 0
-        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
-
-        # when
-        with Ba2GnrlWriter(Ba2Version.V1) as writer:
-            writer.write_to(tmp_path / "out.ba2")
-
-        # then
-        mock_lib.bethkit_ba2_gnrl_writer_write_to.assert_called_once()

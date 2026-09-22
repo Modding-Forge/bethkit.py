@@ -36,7 +36,7 @@ Repository = "https://github.com/Modding-Forge/bethkit.py"
 dev = [
     "hatchling",
     "pyright",
-    "ruff",
+    "ruff==0.15.12",
     "pytest>=7",
     "pytest-mock",
     "pytest-cov",
@@ -45,7 +45,7 @@ dev = [
 [tool.pyright]
 pythonVersion = "3.10"
 typeCheckingMode = "strict"
-include = ["src", "tests"]
+include = ["src", "tests", "scripts"]
 venvPath = "."
 venv = ".venv"
 reportPrivateUsage = false
@@ -55,9 +55,14 @@ line-length = 80
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "ANN", "N"]
+select = ["E", "F", "I", "UP", "ANN", "N", "D"]
 ignore = [
     "UP045",   # Optional[T] is required by project conventions
+    "D200",    # The mandatory copyright module header occupies three lines.
+    "D202",    # Project convention requires a blank line after each docstring.
+    "D212",    # The copyright header starts on the line after opening quotes.
+    "D415",    # The exact copyright header has no terminal punctuation.
+    "D418",    # Project convention also requires documentation on overloads.
 ]
 
 [tool.ruff.lint.per-file-ignores]

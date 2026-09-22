@@ -4,98 +4,26 @@ Copyright (c) Modding Forge
 
 from __future__ import annotations
 
+from ._errors.bethkit_closed_error import BethkitClosedError
+from ._errors.bethkit_error import BethkitError
+from ._errors.bethkit_library_not_found_error import BethkitLibraryNotFoundError
+from ._errors.bethkit_native_error import BethkitNativeError
+from ._errors.bethkit_not_found_error import BethkitNotFoundError
+from ._errors.bethkit_ownership_error import BethkitOwnershipError
+from ._errors.record_decode_error import RecordDecodeError
+from ._errors.schema_mismatch_error import SchemaMismatchError
+from ._errors.string_table_error import StringTableError
+from ._errors.unsupported_edit_error import UnsupportedEditError
 
-class BethkitError(Exception):
-    """
-    Base exception for all bethkit errors.
-
-    All exceptions raised by bethkit.py are subclasses of this class,
-    so callers can catch everything with a single ``except BethkitError``.
-    """
-
-
-class BethkitLibraryNotFoundError(BethkitError):
-    """
-    Raised when the native bethkit shared library cannot be loaded.
-
-    Check that ``bethkit_ffi.dll`` / ``libbethkit_ffi.so`` /
-    ``libbethkit_ffi.dylib`` is placed next to the package directory or
-    that the ``BETHKIT_LIB`` environment variable points to the file.
-    """
-
-
-class BethkitNativeError(BethkitError):
-    """
-    Raised when a native FFI call returns an error code.
-
-    The error message is the text returned by ``bethkit_last_error()``
-    immediately after the failing call, copied before any subsequent
-    FFI call can overwrite the thread-local error buffer.
-
-    Attributes:
-        message (str): Human-readable error text from the native library.
-    """
-
-    message: str
-    """Human-readable error text from the native library."""
-
-    def __init__(self, message: str) -> None:
-        """
-        Args:
-            message (str): Error text returned by the native library.
-        """
-
-        super().__init__(message)
-        self.message = message
-
-    def __repr__(self) -> str:
-        """
-        Returns:
-            str: Developer-friendly representation including the message.
-        """
-
-        return f"BethkitNativeError({self.message!r})"
-
-
-class BethkitClosedError(BethkitError):
-    """
-    Raised when a method is called on an already-closed native handle.
-
-    Once :meth:`close` has been called (or the context manager has
-    exited), the wrapper object is invalid and must not be used.
-    """
-
-
-class BethkitOwnershipError(BethkitError):
-    """
-    Raised when ownership of a handle is transferred more than once.
-
-    After a handle has been moved into a container (e.g.
-    :meth:`~bethkit.PluginCache.add`), the original wrapper is consumed
-    and must not be used again.
-    """
-
-
-class BethkitNotFoundError(BethkitNativeError):
-    """Raised by ``*_required`` convenience methods when a lookup fails.
-
-    Normal lookup methods return ``None`` on not-found; this exception
-    is raised only by the strict ``*_required`` variants that must
-    succeed or fail loudly.
-    """
-
-
-class SchemaMismatchError(BethkitError):
-    """Generated record types do not match the exact loaded schema."""
-
-
-class RecordDecodeError(BethkitError):
-    """A semantic snapshot cannot be represented by its generated model."""
-
-
-class UnsupportedEditError(BethkitError):
-    """An edit cannot be performed without losing structural information."""
-
-
-class StringTableError(BethkitError):
-    """Localized text cannot be resolved or saved consistently."""
+__all__ = [
+    "BethkitError",
+    "BethkitLibraryNotFoundError",
+    "BethkitNativeError",
+    "BethkitClosedError",
+    "BethkitOwnershipError",
+    "BethkitNotFoundError",
+    "SchemaMismatchError",
+    "RecordDecodeError",
+    "UnsupportedEditError",
+    "StringTableError",
+]

@@ -14,7 +14,14 @@ from pathlib import Path
 import pytest
 from conftest import build_grup, build_hedr, build_record, build_subrecord
 
-from bethkit import Game, Plugin, SchemaPackage, SemanticContext, StringFileKind
+from bethkit import (
+    BethkitNativeError,
+    Game,
+    Plugin,
+    SchemaPackage,
+    SemanticContext,
+    StringFileKind,
+)
 from bethkit.strings import LocalizationEditor, LocalizationSet, StringTable
 
 
@@ -77,6 +84,58 @@ def _plugin_bytes(*, localized: bool) -> bytes:
 @pytest.mark.integration
 class TestNativeLocalization:
     """Exercises the compiled schema, editor, patcher, and string writers."""
+
+    def test_partial_language_pack_uses_strings_subdirectory(
+        self, tmp_path: Path
+    ) -> None:
+        """Opens a partial language pack and leaves absent formats empty."""
+
+        # given
+        directory = tmp_path / "Strings"
+        directory.mkdir()
+        with StringTable.new(StringFileKind.STRINGS) as table:
+            table.insert(17, b"Partial pack")
+            table.write_to_file(directory / "test_english.STRINGS")
+
+        # when / then
+        with LocalizationSet.open(tmp_path / "test.esp", "english") as tables:
+            assert tables.get_str(StringFileKind.STRINGS, 17) == "Partial pack"
+            assert tables.get(StringFileKind.DL_STRINGS, 17) is None
+            assert tables.get(StringFileKind.IL_STRINGS, 17) is None
+
+    def test_existing_malformed_table_is_not_treated_as_missing(
+        self, tmp_path: Path
+    ) -> None:
+        """Distinguishes an absent language file from corrupt existing data."""
+
+        # given
+        directory = tmp_path / "Strings"
+        directory.mkdir()
+        (directory / "test_english.STRINGS").write_bytes(b"invalid")
+
+        # when / then
+        with pytest.raises(BethkitNativeError):
+            LocalizationSet.open(tmp_path / "test.esp", "english")
+
+    def test_write_creates_all_three_strings_files(
+        self, tmp_path: Path
+    ) -> None:
+        """Writes the documented layout, including initially empty tables."""
+
+        # given
+        with LocalizationSet.new() as tables:
+            tables.set(StringFileKind.STRINGS, 17, b"Written pack")
+
+            # when
+            tables.write(tmp_path / "test.esp", "english")
+
+        # then
+        expected = {"STRINGS", "DLSTRINGS", "ILSTRINGS"}
+        assert {
+            path.suffix[1:] for path in (tmp_path / "Strings").iterdir()
+        } == expected
+        with LocalizationSet.open(tmp_path / "test.esp", "english") as tables:
+            assert tables.get_str(StringFileKind.STRINGS, 17) == "Written pack"
 
     def test_inline_text_edit_keeps_identity_across_length_changes(
         self, native_context: SemanticContext, tmp_path: Path

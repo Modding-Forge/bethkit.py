@@ -5,40 +5,17 @@ Copyright (c) Modding Forge
 from __future__ import annotations
 
 import ctypes
-from typing import TYPE_CHECKING, Annotated, Optional
+import logging
+from typing import TYPE_CHECKING, ClassVar, Optional
 
-from pydantic import BaseModel, Field
-
-from . import _ffi
+from . import _ffi, _ownership
 from ._error import BethkitClosedError
 from ._ffi import BethkitGlobalFormId
 from .enums import PluginKind
+from .global_form_id import GlobalFormId as GlobalFormId
 
 if TYPE_CHECKING:
     from .plugin.plugin import Plugin
-
-
-class GlobalFormId(BaseModel, frozen=True):
-    """
-    A globally unique FormID consisting of a plugin name and a 24-bit
-    object ID.
-    """
-
-    plugin_name: str
-    """Name of the owning plugin (e.g. ``"Skyrim.esm"``)."""
-
-    object_id: Annotated[int, Field(strict=True, ge=0, le=0xFFFFFF)]
-    """24-bit object identifier within *plugin_name*."""
-
-    def __str__(self) -> str:
-        """
-        Return a human-readable representation of this FormID.
-
-        Returns:
-            str: Human-readable ``"PluginName:0xOBJECTID"`` representation.
-        """
-
-        return f"{self.plugin_name}:0x{self.object_id:06X}"
 
 
 class LoadOrder:
@@ -57,10 +34,12 @@ class LoadOrder:
             gfid = lo.resolve(0x00012E49, "Skyrim.esm")
     """
 
-    __ptr: int
+    log: ClassVar[logging.Logger] = logging.getLogger("LoadOrder")
+    __ptr: int = 0
 
     def __init__(self) -> None:
-        """
+        """Creates an empty native load order owned by this instance.
+
         Raises:
             BethkitNativeError: If the native load-order object cannot be
                 created.
@@ -74,7 +53,7 @@ class LoadOrder:
 
     def __check_open(self) -> int:
         """
-        Return the native pointer, raising if the handle is already closed.
+        Returns the native pointer, raising if the handle is already closed.
 
         Returns:
             int: Non-zero native pointer.
@@ -89,41 +68,47 @@ class LoadOrder:
 
     def close(self) -> None:
         """
-        Release the native load-order handle.
+        Releases the native load-order handle.
 
         Safe to call multiple times; subsequent calls are no-ops.
         """
 
         if self.__ptr:
-            _ffi.load_lib().bethkit_load_order_free(self.__ptr)
+            pointer = self.__ptr
             self.__ptr = 0
+            _ffi.load_lib().bethkit_load_order_free(pointer)
 
     def __enter__(self) -> LoadOrder:
         """
-        Return *self* for use as a context manager.
+        Returns *self* for use as a context manager.
 
         Returns:
             LoadOrder: This instance.
+
+        Raises:
+            BethkitClosedError: This load order is closed.
         """
 
+        self.__check_open()
         return self
 
     def __exit__(self, *_: object) -> None:
-        """Close the load order when exiting the context."""
+        """Closes the load order when exiting the context.
+
+        Args:
+            *_: Exception information supplied by the context manager.
+        """
 
         self.close()
 
     def __del__(self) -> None:
-        """Free the native handle on garbage collection."""
+        """Frees the native handle on garbage collection."""
 
-        try:
-            self.close()
-        except Exception:
-            pass
+        _ownership.finalize(self.close, self.log)
 
     def push(self, name: str, kind: PluginKind) -> None:
         """
-        Append a plugin to the end of the load order.
+        Appends a plugin to the end of the load order.
 
         Args:
             name (str): Plugin file name (e.g. ``"Skyrim.esm"``).
@@ -133,6 +118,8 @@ class LoadOrder:
         Raises:
             BethkitClosedError: If this load order has already been closed.
             BethkitNativeError: If the native call fails.
+            ValueError: The plugin name contains a NUL character.
+            UnicodeEncodeError: The plugin name contains an unpaired surrogate.
         """
 
         lib = _ffi.load_lib()
@@ -141,7 +128,8 @@ class LoadOrder:
             _ffi.raise_last_error(lib)
 
     def __len__(self) -> int:
-        """
+        """Returns the number of registered plugins.
+
         Returns:
             int: Number of plugins currently in the load order.
 
@@ -158,7 +146,7 @@ class LoadOrder:
         plugin: Optional[Plugin] = None,
     ) -> GlobalFormId:
         """
-        Resolve a local FormID to a globally unique :class:`GlobalFormId`.
+        Resolves a local FormID to a globally unique :class:`GlobalFormId`.
 
         Args:
             form_id (int): The raw 32-bit FormID as stored in a plugin
@@ -172,10 +160,13 @@ class LoadOrder:
             GlobalFormId: The resolved global FormID.
 
         Raises:
-            BethkitClosedError: If this load order has already been closed.
+            BethkitClosedError: This load order or the source plugin is closed.
             BethkitNativeError: If *form_id* or *source_plugin* cannot be
                 resolved.
-            ValueError: If the FormID is outside the unsigned 32-bit range.
+            UnicodeDecodeError: The native plugin name is not UTF-8.
+            UnicodeEncodeError: The source name contains an unpaired surrogate.
+            ValueError: The FormID is outside the unsigned 32-bit range or the
+                source name contains a NUL character.
         """
 
         lib = _ffi.load_lib()
@@ -205,7 +196,8 @@ class LoadOrder:
         return GlobalFormId(plugin_name=plugin_name, object_id=out.object_id)
 
     def __repr__(self) -> str:
-        """
+        """Returns the plugin count or closed state for debugging.
+
         Returns:
             str: Developer-friendly representation with plugin count.
         """

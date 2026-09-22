@@ -172,11 +172,14 @@ uv run pytest
 Linting and type-checking:
 
 ```sh
-uv tool run ruff check src/ tests/
-uv tool run pyright src/ tests/
+uv run ruff check src/ tests/ scripts/
+uv run ruff format --check src/ tests/ scripts/
+uv run pyright src/ tests/ scripts/
 ```
 
 Unit tests mock the native boundary. A release-quality check must also set `BETHKIT_LIB` and `BETHKIT_SCHEMA` and run `pytest --require-native`; an explicitly configured but incompatible library is an error, not a skipped test. See [BUILDING.md](BUILDING.md) for the pinned workflow and [SCHEMA.md](SCHEMA.md) for deterministic model generation.
+
+Contributions follow the [Python style conventions](STYLE.md). Maintained files are limited to 400 lines, enforced by local commit/push hooks, CI, and the build backend; individual generated-file exceptions are recorded explicitly in `file-length-policy.json`. Install the local guards with `uv run python scripts/install_git_hooks.py` after setting up the development environment.
 
 ## Related projects
 
