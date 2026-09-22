@@ -136,6 +136,7 @@ class TestNativeBuildHook:
         package_library.write_bytes(b"existing library")
         mocker.patch.dict("os.environ", {"BETHKIT_LIB": str(library)})
         validate = mocker.patch.object(hatch_build, "_validate_library")
+        mocker.patch.object(hatch_build, "_validate_file_lengths")
         hook = hatch_build.CustomBuildHook(
             str(tmp_path), {}, MagicMock(), MagicMock(), str(tmp_path), "wheel"
         )
@@ -223,6 +224,7 @@ class TestNativeBuildHook:
 
         # given
         validate = mocker.patch.object(hatch_build, "_validate_library")
+        mocker.patch.object(hatch_build, "_validate_file_lengths")
         hook = hatch_build.CustomBuildHook(
             str(tmp_path), {}, MagicMock(), MagicMock(), str(tmp_path), "wheel"
         )
@@ -241,6 +243,7 @@ class TestNativeBuildHook:
         """Allows source distributions without claiming native wheel support."""
 
         validate = mocker.patch.object(hatch_build, "_validate_library")
+        mocker.patch.object(hatch_build, "_validate_file_lengths")
         hook = hatch_build.CustomBuildHook(
             str(tmp_path), {}, MagicMock(), MagicMock(), str(tmp_path), "sdist"
         )

@@ -5,517 +5,29 @@ Copyright (c) Modding Forge
 from __future__ import annotations
 
 import ctypes
+import logging
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, ClassVar, Optional
 
 from .. import _ffi, _ownership
 from .._error import BethkitClosedError, BethkitNativeError
-from ..enums import Game, PluginKind
+from ..enums import Game
 
 if TYPE_CHECKING:
     from ..schema import SemanticContext
     from ..strings import LocalizationSet, StringReference
 
 
-class SubRecord(_ownership.BorrowedHandle):
-    """
-    A single sub-record field inside a :class:`Record`.
+from ._metadata import PluginMetadata
+from .group import Group as Group
+from .record import Record as Record
+from .subrecord import SubRecord as SubRecord
 
-    Sub-records are borrowed from the parent ``Record`` and become
-    invalid once the record is closed or freed.
-    """
 
-    def __init__(self, ptr: int, parent: Record) -> None:
-        """
-        Args:
-            ptr (int): Native pointer to the underlying sub-record object.
-            parent (Record): Owning record that keeps native memory alive.
-        """
-
-        super().__init__(ptr, parent)
-
-    @property
-    def signature(self) -> bytes:
-        """
-        Four-byte ASCII signature identifying the sub-record type.
-
-        Returns:
-            bytes: Four-byte signature (e.g. ``b"EDID"``).
-
-        Raises:
-            BethkitNativeError: If the native call fails.
-        """
-
-        lib = _ffi.load_lib()
-        buf = (ctypes.c_uint8 * 4)()
-        if lib.bethkit_subrecord_signature(self._native_pointer(), buf) != 0:
-            _ffi.raise_last_error(lib)
-        return bytes(buf)
-
-    @property
-    def raw_bytes(self) -> bytes:  # type: ignore[return]
-        """
-        Raw byte content of the sub-record as stored in the plugin.
-
-        Returns:
-            bytes: Sub-record data, or ``b""`` if empty.
-        """
-
-        lib = _ffi.load_lib()
-        sl = lib.bethkit_subrecord_bytes(self._native_pointer())
-        if not sl.ptr:
-            return b""
-        return bytes(ctypes.string_at(sl.ptr, sl.len))
-
-    def as_u8(self) -> int:
-        """
-        Interpret the sub-record data as an unsigned 8-bit integer.
-
-        Returns:
-            int: Decoded value.
-
-        Raises:
-            BethkitNativeError: If the data length does not match.
-        """
-
-        lib = _ffi.load_lib()
-        out = ctypes.c_uint8()
-        if (
-            lib.bethkit_subrecord_as_u8(
-                self._native_pointer(), ctypes.byref(out)
-            )
-            != 0
-        ):
-            _ffi.raise_last_error(lib)
-        return out.value
-
-    def as_u16(self) -> int:
-        """
-        Interpret the sub-record data as an unsigned 16-bit integer.
-
-        Returns:
-            int: Decoded value.
-
-        Raises:
-            BethkitNativeError: If the data length does not match.
-        """
-
-        lib = _ffi.load_lib()
-        out = ctypes.c_uint16()
-        if (
-            lib.bethkit_subrecord_as_u16(
-                self._native_pointer(), ctypes.byref(out)
-            )
-            != 0
-        ):
-            _ffi.raise_last_error(lib)
-        return out.value
-
-    def as_u32(self) -> int:
-        """
-        Interpret the sub-record data as an unsigned 32-bit integer.
-
-        Returns:
-            int: Decoded value.
-
-        Raises:
-            BethkitNativeError: If the data length does not match.
-        """
-
-        lib = _ffi.load_lib()
-        out = ctypes.c_uint32()
-        if (
-            lib.bethkit_subrecord_as_u32(
-                self._native_pointer(), ctypes.byref(out)
-            )
-            != 0
-        ):
-            _ffi.raise_last_error(lib)
-        return out.value
-
-    def as_f32(self) -> float:
-        """
-        Interpret the sub-record data as a 32-bit float.
-
-        Returns:
-            float: Decoded value.
-
-        Raises:
-            BethkitNativeError: If the data length does not match.
-        """
-
-        lib = _ffi.load_lib()
-        out = ctypes.c_float()
-        if (
-            lib.bethkit_subrecord_as_f32(
-                self._native_pointer(), ctypes.byref(out)
-            )
-            != 0
-        ):
-            _ffi.raise_last_error(lib)
-        return out.value
-
-    def as_str(self) -> str:
-        """
-        Interpret the sub-record data as a null-terminated UTF-8 string.
-
-        Returns:
-            str: Decoded string.
-
-        Raises:
-            BethkitNativeError: If the data is not a valid null-terminated
-                string.
-        """
-
-        lib = _ffi.load_lib()
-        ptr = lib.bethkit_subrecord_as_zstring(self._native_pointer())
-        if not ptr:
-            _ffi.raise_last_error(lib)
-        try:
-            return ctypes.string_at(ptr).decode("utf-8")
-        finally:
-            lib.bethkit_zstring_free(ptr)
-
-    def __repr__(self) -> str:
-        """
-        Returns:
-            str: Developer-friendly representation showing the signature.
-        """
-
-        try:
-            sig = self.signature.decode("ascii", errors="replace")
-        except BethkitNativeError:
-            sig = "?"
-        return f"<SubRecord {sig!r}>"
-
-
-class Record(_ownership.BorrowedHandle):
-    """
-    A single plugin record containing sub-records.
-
-    Records are owned by their parent :class:`Group` or
-    :class:`PluginCache` and must not outlive it.
-
-    Access after the native owner closes raises ``BethkitClosedError``.
-    """
-
-    def __init__(self, ptr: int, parent: _ownership.BorrowOwner) -> None:
-        """
-        Args:
-            ptr (int): Native pointer to the underlying record object.
-            parent (object): Owner that keeps native memory alive.
-        """
-
-        super().__init__(ptr, parent)
-
-    @property
-    def signature(self) -> bytes:
-        """
-        Four-byte ASCII record type signature.
-
-        Returns:
-            bytes: Four-byte signature (e.g. ``b"NPC_"``).
-
-        Raises:
-            BethkitNativeError: If the native call fails.
-        """
-
-        lib = _ffi.load_lib()
-        buf = (ctypes.c_uint8 * 4)()
-        if lib.bethkit_record_signature(self._native_pointer(), buf) != 0:
-            _ffi.raise_last_error(lib)
-        return bytes(buf)
-
-    @property
-    def form_id(self) -> int:
-        """
-        Raw 32-bit FormID of the record as stored in the plugin.
-
-        Returns:
-            int: FormID value.
-        """
-
-        return _ffi.load_lib().bethkit_record_form_id(self._native_pointer())
-
-    @property
-    def flags(self) -> int:
-        """
-        Record header flags bitmask.
-
-        Returns:
-            int: Flags value.
-        """
-
-        return _ffi.load_lib().bethkit_record_flags(self._native_pointer())
-
-    @property
-    def form_version(self) -> int:
-        """
-        Form version stored in the record header.
-
-        Returns:
-            int: Form version number.
-        """
-
-        return _ffi.load_lib().bethkit_record_form_version(
-            self._native_pointer()
-        )
-
-    @property
-    def editor_id(self) -> Optional[str]:
-        """
-        Editor ID string (EDID sub-record), if present.
-
-        Returns:
-            Optional[str]: The editor ID, or ``None`` if absent.
-        """
-
-        lib = _ffi.load_lib()
-        ptr = ctypes.c_void_p()
-        status = lib.bethkit_record_editor_id_status(
-            self._native_pointer(), ctypes.byref(ptr)
-        )
-        if status == 1:
-            return None
-        if status != 0:
-            _ffi.raise_last_error(lib)
-        try:
-            return ctypes.string_at(ptr).decode("utf-8")
-        finally:
-            lib.bethkit_record_editor_id_free(ptr)
-
-    def subrecord_count(self) -> int:
-        """
-        Return the number of sub-records in this record.
-
-        Returns:
-            int: Sub-record count.
-
-        Raises:
-            BethkitNativeError: If the native call fails.
-        """
-
-        lib = _ffi.load_lib()
-        n = lib.bethkit_record_subrecord_count(self._native_pointer())
-        if n < 0:
-            _ffi.raise_last_error(lib)
-        return n
-
-    def subrecord_at(self, index: int) -> SubRecord:
-        """
-        Return the sub-record at the given index.
-
-        Args:
-            index (int): Zero-based sub-record index.
-
-        Returns:
-            SubRecord: Borrowed sub-record.
-
-        Raises:
-            BethkitNativeError: If *index* is out of range.
-        """
-
-        lib = _ffi.load_lib()
-        ptr = lib.bethkit_record_subrecord_get(self._native_pointer(), index)
-        if not ptr:
-            _ffi.raise_last_error(lib)
-        return SubRecord(ptr, self)
-
-    def find_subrecord(self, sig: bytes | str) -> Optional[SubRecord]:
-        """
-        Find the first sub-record matching the given 4-byte signature.
-
-        Args:
-            sig (bytes | str): Four-byte signature to search for.
-
-        Returns:
-            Optional[SubRecord]: The first matching sub-record, or ``None``.
-
-        Raises:
-            ValueError: If *sig* is not exactly 4 bytes.
-        """
-
-        if isinstance(sig, str):
-            sig = sig.encode("ascii")
-        if len(sig) != 4:
-            raise ValueError("sig must be exactly 4 bytes")
-        lib = _ffi.load_lib()
-        buf = (ctypes.c_uint8 * 4)(*sig)
-        ptr = lib.bethkit_record_subrecord_find(self._native_pointer(), buf)
-        if not ptr:
-            return None
-        return SubRecord(ptr, self)
-
-    def __iter__(self) -> Iterator[SubRecord]:
-        """
-        Iterate over all sub-records in this record.
-
-        Yields:
-            SubRecord: Each sub-record in order.
-        """
-
-        for i in range(self.subrecord_count()):
-            yield self.subrecord_at(i)
-
-    def __repr__(self) -> str:
-        """
-        Returns:
-            str: Developer-friendly representation with signature and FormID.
-        """
-
-        try:
-            sig = self.signature.decode("ascii", errors="replace")
-            fid = self.form_id
-        except BethkitNativeError:
-            return "<Record ?>"
-        return f"<Record {sig!r} FormID=0x{fid:08X}>"
-
-
-class Group(_ownership.BorrowedHandle):
-    """
-    A top-level group inside a plugin, containing records or sub-groups.
-
-    Groups are the primary organisational unit in Bethesda plugin files.
-    They may contain :class:`Record` children or nested :class:`Group`
-    children.
-
-    Access after the native owner closes raises ``BethkitClosedError``.
-    """
-
-    def __init__(self, ptr: int, parent: Plugin | Group) -> None:
-        """
-        Args:
-            ptr (int): Native pointer to the underlying group object.
-            parent (Plugin | Group): Owner that keeps native memory alive.
-        """
-
-        super().__init__(ptr, parent)
-
-    @property
-    def group_type(self) -> int:
-        """
-        Numeric group type code as defined in the plugin format.
-
-        Returns:
-            int: Group type (e.g. ``0`` for top-level groups).
-
-        Raises:
-            BethkitNativeError: If the native call fails.
-        """
-
-        lib = _ffi.load_lib()
-        t = lib.bethkit_group_type(self._native_pointer())
-        if t < 0:
-            _ffi.raise_last_error(lib)
-        return t
-
-    @property
-    def child_count(self) -> int:
-        """
-        Total number of direct children (records and sub-groups).
-
-        Returns:
-            int: Child count.
-        """
-
-        return _ffi.load_lib().bethkit_group_child_count(self._native_pointer())
-
-    def child_is_record(self, index: int) -> bool:
-        """
-        Return whether the child at *index* is a record (vs. a group).
-
-        Args:
-            index (int): Zero-based child index.
-
-        Returns:
-            bool: ``True`` if the child is a :class:`Record`.
-        """
-
-        return bool(
-            _ffi.load_lib().bethkit_group_child_is_record(
-                self._native_pointer(), index
-            )
-        )
-
-    def child_as_record(self, index: int) -> Optional[Record]:
-        """
-        Return the child at *index* as a :class:`Record`.
-
-        Args:
-            index (int): Zero-based child index.
-
-        Returns:
-            Optional[Record]: The child record, or ``None`` if the child is
-            a group or the index is out of range.
-        """
-
-        lib = _ffi.load_lib()
-        ptr = lib.bethkit_group_child_as_record(self._native_pointer(), index)
-        if not ptr:
-            return None
-        return Record(ptr, self)
-
-    def child_as_group(self, index: int) -> Optional[Group]:
-        """
-        Return the child at *index* as a :class:`Group`.
-
-        Args:
-            index (int): Zero-based child index.
-
-        Returns:
-            Optional[Group]: The child group, or ``None`` if the child is
-            a record or the index is out of range.
-        """
-
-        lib = _ffi.load_lib()
-        ptr = lib.bethkit_group_child_as_group(self._native_pointer(), index)
-        if not ptr:
-            return None
-        return Group(ptr, self)
-
-    def __iter__(self) -> Iterator[Record | Group]:
-        """
-        Iterate over all direct children of this group.
-
-        Yields:
-            Record | Group: Each child in order.
-
-        Raises:
-            BethkitClosedError: If the owner closes during iteration.
-        """
-
-        lib = _ffi.load_lib()
-        for i in range(self.child_count):
-            if lib.bethkit_group_child_is_record(self._native_pointer(), i):
-                ptr = lib.bethkit_group_child_as_record(
-                    self._native_pointer(), i
-                )
-                if ptr:
-                    yield Record(ptr, self)
-            else:
-                ptr = lib.bethkit_group_child_as_group(
-                    self._native_pointer(), i
-                )
-                if ptr:
-                    yield Group(ptr, self)
-
-    def __repr__(self) -> str:
-        """
-        Returns:
-            str: Developer-friendly representation showing type and count.
-        """
-
-        try:
-            return f"<Group type={self.group_type} children={self.child_count}>"
-        except BethkitNativeError:
-            return "<Group ?>"
-
-
-class Plugin:
-    """
-    An open Bethesda plugin file (ESP, ESM, or ESL).
+class Plugin(PluginMetadata):
+    """An open Bethesda plugin file (ESP, ESM, or ESL).
 
     Use as a context manager to guarantee that the native handle is freed
     even on error::
@@ -527,21 +39,43 @@ class Plugin:
                         print(child.editor_id)
     """
 
-    __ptr: int
+    log: ClassVar[logging.Logger] = logging.getLogger("Plugin")
+    __ptr: int = 0
     __borrow_owner: Optional[_ownership.BorrowOwner]
     __source_name: Optional[str]
     __reference_token: uuid.UUID
 
-    def __init__(self, ptr: int) -> None:
-        """
-        Args:
-            ptr (int): Native handle returned by the FFI open call.
+    def __init__(self) -> None:
+        """Rejects direct construction of an owned native handle.
+
+        Raises:
+            TypeError: Always; use this class's public creation methods.
         """
 
-        self.__ptr = ptr
-        self.__borrow_owner = None
-        self.__source_name = None
-        self.__reference_token = uuid.uuid4()
+        raise TypeError("Use Plugin's public creation methods.")
+
+    @classmethod
+    def _from_native(cls, pointer: int) -> Plugin:
+        """Adopts a native allocation returned by a successful FFI call.
+
+        Args:
+            pointer: Nonzero native pointer whose ownership is transferred.
+
+        Returns:
+            A wrapper responsible for freeing the allocation exactly once.
+
+        Raises:
+            ValueError: The supplied native pointer is null.
+        """
+
+        if not pointer:
+            raise ValueError("Cannot adopt a null Plugin pointer.")
+        result = cls.__new__(cls)
+        result.__borrow_owner = None
+        result.__source_name = None
+        result.__reference_token = uuid.uuid4()
+        result.__ptr = pointer
+        return result
 
     @property
     def source_name(self) -> Optional[str]:
@@ -596,8 +130,7 @@ class Plugin:
         self.__borrow_owner = owner
 
     def __check_open(self) -> int:
-        """
-        Return the native pointer, raising if the handle has been closed.
+        """Return the native pointer, raising if the handle has been closed.
 
         Returns:
             int: Valid native pointer.
@@ -612,8 +145,7 @@ class Plugin:
 
     @classmethod
     def open(cls, path: Path, game: Game) -> Plugin:
-        """
-        Open a plugin file from disk.
+        """Open a plugin file from disk.
 
         Args:
             path (Path): Filesystem path to the ``.esp``, ``.esm``, or
@@ -631,7 +163,9 @@ class Plugin:
         ptr = lib.bethkit_plugin_open(_ffi.enc(path), int(game))
         if not ptr:
             _ffi.raise_last_error(lib)
-        result = cls(ptr)
+        result = _ownership.adopt_native(
+            ptr, cls._from_native, lib.bethkit_plugin_free
+        )
         result.__source_name = path.name
         return result
 
@@ -639,8 +173,7 @@ class Plugin:
     def from_bytes(
         cls, data: bytes, game: Game, *, name: Optional[str] = None
     ) -> Plugin:
-        """
-        Parse a plugin from an in-memory byte buffer.
+        """Parse a plugin from an in-memory byte buffer.
 
         Args:
             data (bytes): Raw plugin file contents.
@@ -659,7 +192,9 @@ class Plugin:
         ptr = lib.bethkit_plugin_open_from_bytes(buf, len(data), int(game))
         if not ptr:
             _ffi.raise_last_error(lib)
-        result = cls(ptr)
+        result = _ownership.adopt_native(
+            ptr, cls._from_native, lib.bethkit_plugin_free
+        )
         result.__source_name = name
         return result
 
@@ -688,8 +223,7 @@ class Plugin:
         return references.iter_strings(self, context, tables)
 
     def close(self) -> None:
-        """
-        Release the native plugin handle.
+        """Release the native plugin handle.
 
         Safe to call multiple times; subsequent calls are no-ops.
 
@@ -699,12 +233,12 @@ class Plugin:
         """
 
         if self.__ptr:
-            _ffi.load_lib().bethkit_plugin_free(self.__ptr)
+            pointer = self.__ptr
             self.__ptr = 0
+            _ffi.load_lib().bethkit_plugin_free(pointer)
 
     def _transfer_ptr(self) -> int:
-        """
-        Transfer ownership of the native handle to the caller.
+        """Transfer ownership of the native handle to the caller.
 
         After this call the wrapper is closed (``__ptr`` is set to ``0``).
         Called by :class:`PluginCache` when it takes ownership of the plugin.
@@ -722,128 +256,35 @@ class Plugin:
         return ptr
 
     def __enter__(self) -> Plugin:
-        """Return *self* for use as a context manager."""
+        """Returns this open owner for use as a context manager.
 
+        Returns:
+            This instance, valid until the context exits or it is closed.
+
+        Raises:
+            BethkitClosedError: This owner is already closed or transferred.
+        """
+
+        self.__check_open()
         return self
 
     def __exit__(self, *_: object) -> None:
-        """Close the plugin when exiting the context."""
+        """Close the plugin when exiting the context.
+
+        Args:
+            *_: Exception details supplied by the context manager protocol.
+        """
 
         self.close()
 
     def __del__(self) -> None:
         """Free the native handle on garbage collection."""
 
-        try:
-            self.close()
-        except Exception:
-            pass
-
-    @property
-    def kind(self) -> PluginKind:
-        """
-        Plugin type as declared in the file header.
-
-        Returns:
-            PluginKind: ``FULL``, ``LIGHT``, or ``OVERLAY``.
-
-        Raises:
-            BethkitClosedError: If the plugin has been closed.
-        """
-
-        return PluginKind(
-            _ffi.load_lib().bethkit_plugin_kind(self.__check_open())
-        )
-
-    @property
-    def is_localized(self) -> bool:
-        """
-        Whether the plugin uses external string localisation files.
-
-        Returns:
-            bool: ``True`` if the plugin sets the localised flag.
-
-        Raises:
-            BethkitClosedError: If the plugin has been closed.
-        """
-
-        return bool(
-            _ffi.load_lib().bethkit_plugin_is_localized(self.__check_open())
-        )
-
-    @property
-    def description(self) -> Optional[str]:
-        """
-        Plugin description from the SNAM sub-record, if present.
-
-        Returns:
-            Optional[str]: Description string, or ``None`` if absent.
-
-        Raises:
-            BethkitClosedError: If the plugin has been closed.
-        """
-
-        lib = _ffi.load_lib()
-        raw: Optional[bytes] = lib.bethkit_plugin_description(
-            self.__check_open()
-        )
-        return raw.decode("utf-8") if raw else None
-
-    @property
-    def master_count(self) -> int:
-        """
-        Number of master plugin dependencies declared in the header.
-
-        Returns:
-            int: Master count.
-
-        Raises:
-            BethkitClosedError: If the plugin has been closed.
-        """
-
-        return _ffi.load_lib().bethkit_plugin_master_count(self.__check_open())
-
-    def master_at(self, index: int) -> str:
-        """
-        Return the master plugin name at the given index.
-
-        Args:
-            index (int): Zero-based master index.
-
-        Returns:
-            str: Master file name (e.g. ``"Skyrim.esm"``).
-
-        Raises:
-            BethkitClosedError: If the plugin has been closed.
-            BethkitNativeError: If *index* is out of range.
-        """
-
-        lib = _ffi.load_lib()
-        raw: Optional[bytes] = lib.bethkit_plugin_master_get(
-            self.__check_open(), index
-        )
-        if raw is None:
-            _ffi.raise_last_error(lib)
-        return raw.decode("utf-8")  # type: ignore[union-attr]
-
-    @property
-    def masters(self) -> list[str]:
-        """
-        All master plugin names in load order.
-
-        Returns:
-            list[str]: Ordered list of master file names.
-
-        Raises:
-            BethkitClosedError: If the plugin has been closed.
-        """
-
-        return [self.master_at(i) for i in range(self.master_count)]
+        _ownership.finalize(self.close, self.log)
 
     @property
     def group_count(self) -> int:
-        """
-        Number of top-level groups in the plugin.
+        """Number of top-level groups in the plugin.
 
         Returns:
             int: Group count.
@@ -855,8 +296,7 @@ class Plugin:
         return _ffi.load_lib().bethkit_plugin_group_count(self.__check_open())
 
     def group_at(self, index: int) -> Group:
-        """
-        Return the top-level group at the given index.
+        """Return the top-level group at the given index.
 
         Args:
             index (int): Zero-based group index.
@@ -873,12 +313,11 @@ class Plugin:
         ptr = lib.bethkit_plugin_group_get(self.__check_open(), index)
         if not ptr:
             _ffi.raise_last_error(lib)
-        return Group(ptr, self)
+        return Group._from_native(ptr, self)
 
     @property
     def groups(self) -> Iterator[Group]:
-        """
-        Iterate over all top-level groups.
+        """Iterate over all top-level groups.
 
         Yields:
             Group: Each top-level group in order.
@@ -891,18 +330,20 @@ class Plugin:
             yield self.group_at(i)
 
     def __iter__(self) -> Iterator[Group]:
-        """
-        Iterate over all top-level groups (alias for :attr:`groups`).
+        """Iterate over all top-level groups (alias for :attr:`groups`).
 
-        Yields:
-            Group: Each top-level group in order.
+        Returns:
+            An iterator over each top-level group in order.
+
+        Raises:
+            BethkitClosedError: The plugin closes during iteration.
+            BethkitNativeError: A group cannot be read during iteration.
         """
 
         return self.groups
 
     def find_record(self, form_id: int) -> Optional[Record]:
-        """
-        Search for a record by its raw 32-bit FormID.
+        """Search for a record by its raw 32-bit FormID.
 
         Args:
             form_id (int): The raw FormID to look up.
@@ -918,10 +359,11 @@ class Plugin:
         ptr = lib.bethkit_plugin_find_record(self.__check_open(), form_id)
         if not ptr:
             return None
-        return Record(ptr, self)
+        return Record._from_native(ptr, self)
 
     def __repr__(self) -> str:
-        """
+        """Returns a concise diagnostic representation.
+
         Returns:
             str: Developer-friendly representation with kind and group count.
         """

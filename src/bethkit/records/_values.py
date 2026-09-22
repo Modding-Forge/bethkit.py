@@ -7,11 +7,13 @@ Copyright (c) Modding Forge
 from __future__ import annotations
 
 import enum
-from typing import Annotated, Optional
+from typing import Annotated, Optional, TypeAlias
 
 import pydantic
 
-UInt32 = Annotated[int, pydantic.Field(strict=True, ge=0, le=0xFFFFFFFF)]
+UInt32: TypeAlias = Annotated[
+    int, pydantic.Field(strict=True, ge=0, le=0xFFFFFFFF)
+]
 
 
 class FormId(pydantic.BaseModel, frozen=True):

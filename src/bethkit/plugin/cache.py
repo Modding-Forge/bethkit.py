@@ -5,15 +5,15 @@ Copyright (c) Modding Forge
 from __future__ import annotations
 
 import ctypes
-from typing import Optional
+import logging
+from typing import ClassVar, Optional
 
-from pydantic import BaseModel, ConfigDict
-
-from .. import _ffi
+from .. import _ffi, _ownership
 from .._error import BethkitClosedError, BethkitOwnershipError
 from .._ffi import BethkitGlobalFormId
 from ..load_order import GlobalFormId
-from ..plugin import plugin as plugin_module
+from . import plugin as plugin_module
+from .cache_hit import CacheHit as CacheHit
 
 
 def _require_plugin(value: object) -> plugin_module.Plugin:
@@ -36,23 +36,8 @@ def _require_plugin(value: object) -> plugin_module.Plugin:
     return value
 
 
-class CacheHit(BaseModel, frozen=True):
-    """
-    Result of a successful :meth:`PluginCache.find_by_editor_id` lookup.
-    """
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    record: plugin_module.Record
-    """The matched record (borrowed, valid while the cache is open)."""
-
-    global_form_id: GlobalFormId
-    """The resolved global FormID of the matched record."""
-
-
 class PluginCache:
-    """
-    An in-memory cache that indexes records across multiple loaded plugins.
+    """An in-memory cache that indexes records across multiple loaded plugins.
 
     Add plugins with :meth:`add`, then use :meth:`resolve` or
     :meth:`find_by_editor_id` to look up records across all loaded
@@ -66,10 +51,12 @@ class PluginCache:
             rec = cache.resolve("Skyrim.esm", 0x12E49)
     """
 
-    __ptr: int
+    log: ClassVar[logging.Logger] = logging.getLogger("PluginCache")
+    __ptr: int = 0
 
     def __init__(self) -> None:
-        """
+        """Creates an empty native plugin cache.
+
         Raises:
             BethkitNativeError: If the native cache object cannot be created.
         """
@@ -81,8 +68,7 @@ class PluginCache:
         self.__ptr = ptr
 
     def __check_open(self) -> int:
-        """
-        Return the native pointer, raising if the handle is already closed.
+        """Return the native pointer, raising if the handle is already closed.
 
         Returns:
             int: Non-zero native pointer.
@@ -96,15 +82,15 @@ class PluginCache:
         return self.__ptr
 
     def close(self) -> None:
-        """
-        Release the native cache handle.
+        """Release the native cache handle.
 
         Safe to call multiple times; subsequent calls are no-ops.
         """
 
         if self.__ptr:
-            _ffi.load_lib().bethkit_plugin_cache_free(self.__ptr)
+            pointer = self.__ptr
             self.__ptr = 0
+            _ffi.load_lib().bethkit_plugin_cache_free(pointer)
 
     def _check_borrowed(self) -> None:
         """Checks whether the cache still owns its borrowed records.
@@ -116,31 +102,34 @@ class PluginCache:
         self.__check_open()
 
     def __enter__(self) -> PluginCache:
-        """
-        Return *self* for use as a context manager.
+        """Return *self* for use as a context manager.
 
         Returns:
             PluginCache: This instance.
+
+        Raises:
+            BethkitClosedError: The native owner is closed or transferred.
         """
 
+        self.__check_open()
         return self
 
     def __exit__(self, *_: object) -> None:
-        """Free the cache when exiting the context."""
+        """Free the cache when exiting the context.
+
+        Args:
+            *_: Exception details supplied by the context manager protocol.
+        """
 
         self.close()
 
     def __del__(self) -> None:
         """Free the native handle on garbage collection."""
 
-        try:
-            self.close()
-        except Exception:
-            pass
+        _ownership.finalize(self.close, self.log)
 
     def add(self, name: str, plugin: plugin_module.Plugin) -> None:
-        """
-        Transfer a :class:`~bethkit.Plugin` into the cache.
+        """Transfer a :class:`~bethkit.Plugin` into the cache.
 
         Ownership of the native plugin handle is transferred to the cache;
         the :class:`~bethkit.Plugin` wrapper becomes invalid after this call.
@@ -173,8 +162,7 @@ class PluginCache:
         plugin._set_borrow_owner(self)
 
     def __len__(self) -> int:
-        """
-        Return the number of plugins currently held in the cache.
+        """Return the number of plugins currently held in the cache.
 
         Returns:
             int: Number of plugins.
@@ -187,8 +175,7 @@ class PluginCache:
 
     @property
     def record_count(self) -> int:
-        """
-        Total number of records indexed across all cached plugins.
+        """Total number of records indexed across all cached plugins.
 
         Returns:
             int: Aggregate record count.
@@ -204,8 +191,7 @@ class PluginCache:
     def resolve(
         self, plugin_name: str, object_id: int
     ) -> Optional[plugin_module.Record]:
-        """
-        Look up a record by its global FormID components.
+        """Look up a record by its global FormID components.
 
         Args:
             plugin_name (str): Name of the owning plugin.
@@ -225,11 +211,10 @@ class PluginCache:
         )
         if not ptr_val:
             return None
-        return plugin_module.Record(ptr_val, self)
+        return plugin_module.Record._from_native(ptr_val, self)
 
     def find_by_editor_id(self, edid: str) -> Optional[CacheHit]:
-        """
-        Search for a record by its EDID (editor ID) string.
+        """Search for a record by its EDID (editor ID) string.
 
         Args:
             edid (str): The editor ID to search for (e.g. ``"ArmorIron"``).
@@ -254,11 +239,13 @@ class PluginCache:
         plugin_name = plugin_name_raw.decode("utf-8") if plugin_name_raw else ""
         gfid = GlobalFormId(plugin_name=plugin_name, object_id=out.object_id)
         return CacheHit(
-            record=plugin_module.Record(ptr_val, self), global_form_id=gfid
+            record=plugin_module.Record._from_native(ptr_val, self),
+            global_form_id=gfid,
         )
 
     def __repr__(self) -> str:
-        """
+        """Returns a concise diagnostic representation.
+
         Returns:
             str: Developer-friendly representation with plugin and record
             counts.

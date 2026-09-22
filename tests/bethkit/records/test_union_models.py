@@ -10,7 +10,7 @@ from typing import Literal
 
 import pytest
 
-from bethkit.records import _base, _wire
+from bethkit.records import _encoding, _materialize, _wire
 from bethkit.records.skyrim_se import acti, info, refr
 
 _PROPERTY_VALUE: str = (
@@ -76,7 +76,7 @@ class TestUnionModelRegression:
         )
         annotation = acti.Property174.model_fields["value"].annotation
         # when
-        decoded = _base._payload(annotation, wire, selected_path)
+        decoded = _materialize._payload(annotation, wire, selected_path)
         # then
         assert decoded == values
 
@@ -93,7 +93,7 @@ class TestUnionModelRegression:
         )
         annotation = info.Structure9471.model_fields["parameter_1"].annotation
         # when
-        decoded = _base._payload(annotation, wire, path)
+        decoded = _materialize._payload(annotation, wire, path)
         # then
         assert isinstance(decoded, info.Sex9485)
         assert decoded is info.Sex9485.FEMALE
@@ -109,7 +109,7 @@ class TestUnionModelRegression:
             shadow_depth_bias=0.0,
         )
         # when
-        encoded = _base._encode(light)
+        encoded = _encoding._encode(light)
         # then
         fields = encoded["fields"]
         assert isinstance(fields, list)

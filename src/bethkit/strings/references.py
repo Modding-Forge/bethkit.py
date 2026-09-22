@@ -6,11 +6,8 @@ Copyright (c) Modding Forge
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import Iterator
-from typing import Literal, Optional
-
-import pydantic
+from typing import Optional
 
 from .. import _error
 from ..enums import StringFileKind
@@ -18,54 +15,14 @@ from ..plugin import plugin as plugin_module
 from ..records import _wire
 from ..schema import schema
 from ..strings import strings
+from .string_identity import StringIdentity as StringIdentity
+from .string_reference import StringReference as StringReference
 
 _TABLE_KINDS: dict[str, StringFileKind] = {
     "strings": StringFileKind.STRINGS,
     "dl_strings": StringFileKind.DL_STRINGS,
     "il_strings": StringFileKind.IL_STRINGS,
 }
-
-
-class StringIdentity(pydantic.BaseModel, frozen=True):
-    """Persistent string position independent of text, IDs, and edit guards.
-
-    A filename is available for disk plugins and named in-memory plugins.
-    Callers persisting references for multiple in-memory plugins must supply
-    a unique filename to ``Plugin.from_bytes(name=...)``.
-    """
-
-    plugin_name: Optional[str]
-    """Source filename, or None for an unnamed in-memory plugin."""
-    record_signature: tuple[int, int, int, int]
-    """Containing record signature."""
-    form_id: int
-    """File-local record identifier."""
-    subrecord_index: int
-    """Position of the containing subrecord."""
-    subrecord_path: str
-    """Matched subrecord schema path."""
-    repeat_scopes: tuple[_wire.RepeatScope, ...]
-    """Native grammar repetition occurrences."""
-    value_steps: tuple[_wire.ValueStep, ...]
-    """Exact nested payload position."""
-
-
-class StringReference(pydantic.BaseModel, frozen=True):
-    """Immutable text snapshot with a native structural edit address."""
-
-    identity: StringIdentity
-    """Position-based identity that never incorporates the current text."""
-    address: _wire.FieldAddress
-    """Exact native address, including a stale-structure guard."""
-    text: Optional[str]
-    """Current text, or None when external tables were not supplied."""
-    storage: Literal["inline", "external"]
-    """Whether the source contains text bytes or an external string ID."""
-    table_kind: Optional[StringFileKind] = None
-    """External table selected by the authoritative schema."""
-    string_id: Optional[int] = None
-    """External table identifier; never part of the string's identity."""
-    _source_token: Optional[uuid.UUID] = pydantic.PrivateAttr(default=None)
 
 
 def _iter_records(
@@ -78,6 +35,9 @@ def _iter_records(
 
     Yields:
         Each borrowed record in source order.
+
+    Raises:
+        BethkitClosedError: The plugin closes during iteration.
     """
 
     stack: list[Iterator[plugin_module.Record | plugin_module.Group]] = [
@@ -129,6 +89,7 @@ def _from_snapshot(
         Addressed translatable strings, excluding editor IDs and other text.
 
     Raises:
+        BethkitClosedError: The plugin or supplied tables are closed.
         StringTableError: A translatable value or supplied table is invalid.
     """
 
@@ -185,9 +146,7 @@ def _from_snapshot(
                 raise _error.StringTableError(
                     f"Invalid translatable {value.kind!r} value at {address}."
                 )
-            object.__setattr__(
-                reference, "_source_token", plugin._reference_identity()
-            )
+            reference._bind_source(plugin._reference_identity())
             yield reference
 
 

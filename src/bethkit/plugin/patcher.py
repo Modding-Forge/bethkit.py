@@ -7,11 +7,13 @@ Copyright (c) Modding Forge
 from __future__ import annotations
 
 import ctypes
+import logging
 from pathlib import Path
+from typing import ClassVar
 
-from .. import _error, _ffi
-from ..plugin import plugin as plugin_module
-from ..plugin import writer
+from .. import _error, _ffi, _ownership
+from . import plugin as plugin_module
+from . import writer
 
 
 class PluginPatcher:
@@ -22,7 +24,8 @@ class PluginPatcher:
     copied, so callers keep ownership of their writable records.
     """
 
-    __pointer: int
+    log: ClassVar[logging.Logger] = logging.getLogger("PluginPatcher")
+    __pointer: int = 0
 
     def __init__(self, plugin: plugin_module.Plugin) -> None:
         """Creates a patcher for an existing plugin.
@@ -61,8 +64,9 @@ class PluginPatcher:
         """Releases the patcher; repeated calls are harmless."""
 
         if self.__pointer:
-            _ffi.load_lib().bethkit_plugin_patcher_free(self.__pointer)
+            pointer = self.__pointer
             self.__pointer = 0
+            _ffi.load_lib().bethkit_plugin_patcher_free(pointer)
 
     def replace_record(
         self, form_id: int, record: writer.WritableRecord
@@ -152,14 +156,15 @@ class PluginPatcher:
         return self
 
     def __exit__(self, *_: object) -> None:
-        """Releases the patcher when leaving a context."""
+        """Releases the patcher when leaving a context.
+
+        Args:
+            *_: Exception details supplied by the context manager protocol.
+        """
 
         self.close()
 
     def __del__(self) -> None:
         """Performs best-effort cleanup of an abandoned patcher."""
 
-        try:
-            self.close()
-        except Exception:
-            pass
+        _ownership.finalize(self.close, self.log)

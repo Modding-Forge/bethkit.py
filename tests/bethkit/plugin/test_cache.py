@@ -238,12 +238,12 @@ class TestPluginCache:
 class TestCacheHit:
     """Tests ``bethkit.plugin.cache.CacheHit``."""
 
-    def test_fields_are_accessible(self) -> None:
+    def test_fields_are_accessible(self, mocker: MockerFixture) -> None:
         """Tests that CacheHit exposes record and global_form_id fields."""
 
         # given
         gfid = GlobalFormId(plugin_name="Skyrim.esm", object_id=0x12E49)
-        sentinel_record = Record(0xDEAD, Plugin(0))
+        sentinel_record = Record._from_native(0xDEAD, mocker.MagicMock())
 
         # when
         hit = CacheHit(record=sentinel_record, global_form_id=gfid)

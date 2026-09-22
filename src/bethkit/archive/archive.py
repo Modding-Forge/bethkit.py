@@ -5,88 +5,21 @@ Copyright (c) Modding Forge
 from __future__ import annotations
 
 import ctypes
+import logging
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 
 from .. import _ffi, _ownership
 from .._error import BethkitClosedError, BethkitNotFoundError
-from ..enums import Ba2Version, BsaVersion
-
-
-def _buf_from_bytes(data: bytes) -> ctypes.Array[ctypes.c_uint8]:
-    """
-    Wrap *data* in a ctypes ``c_uint8`` array for FFI calls.
-
-    Args:
-        data (bytes): Byte sequence to wrap.
-
-    Returns:
-        ctypes.Array: A ``c_uint8`` array backed by a copy of *data*.
-    """
-
-    return (ctypes.c_uint8 * len(data)).from_buffer_copy(data)
-
-
-class ArchiveEntry(_ownership.BorrowedHandle):
-    """
-    A single file entry inside an open archive.
-
-    Instances borrow their data from the parent :class:`Archive` and
-    become invalid once the archive is closed or freed.
-    """
-
-    def __init__(self, ptr: int, parent: Archive) -> None:
-        """
-        Args:
-            ptr (int): Native pointer to the underlying entry object.
-            parent (Archive): Owning archive that keeps native memory alive.
-        """
-
-        super().__init__(ptr, parent)
-
-    @property
-    def path(self) -> str:
-        """
-        Virtual path of the entry as stored in the archive.
-
-        Returns:
-            str: Path string, or an empty string when unavailable.
-        """
-
-        lib = _ffi.load_lib()
-        ptr = lib.bethkit_archive_entry_path(self._native_pointer())
-        if not ptr:
-            return ""
-        return _ffi.copy_and_free_str(
-            ptr, lib.bethkit_archive_entry_path_free, lib
-        )
-
-    @property
-    def uncompressed_size(self) -> int:
-        """
-        Uncompressed size of the entry data in bytes.
-
-        Returns:
-            int: Byte count of the decompressed content.
-        """
-
-        return _ffi.load_lib().bethkit_archive_entry_uncompressed_size(
-            self._native_pointer()
-        )
-
-    def __repr__(self) -> str:
-        """
-        Returns:
-            str: Developer-friendly representation showing the entry path.
-        """
-
-        return f"<ArchiveEntry {self.path!r}>"
+from .ba2_dx10_writer import Ba2Dx10Writer as Ba2Dx10Writer
+from .ba2_gnrl_writer import Ba2GnrlWriter as Ba2GnrlWriter
+from .bsa_writer import BsaWriter as BsaWriter
+from .entry import ArchiveEntry as ArchiveEntry
 
 
 class Archive:
-    """
-    An open Bethesda archive (BSA or BA2) in read-only mode.
+    """An open Bethesda archive (BSA or BA2) in read-only mode.
 
     Use as a context manager to guarantee that the native handle is
     freed even on error::
@@ -95,19 +28,40 @@ class Archive:
             data = arc.extract("meshes/foo.nif")
     """
 
-    __ptr: int
+    log: ClassVar[logging.Logger] = logging.getLogger("Archive")
+    __ptr: int = 0
 
-    def __init__(self, ptr: int) -> None:
+    def __init__(self) -> None:
+        """Rejects direct construction of an owned native handle.
+
+        Raises:
+            TypeError: Always; use this class's public creation methods.
         """
+
+        raise TypeError("Use Archive's public creation methods.")
+
+    @classmethod
+    def _from_native(cls, pointer: int) -> Archive:
+        """Adopts a native allocation returned by a successful FFI call.
+
         Args:
-            ptr (int): Native handle returned by the FFI open call.
+            pointer: Nonzero native pointer whose ownership is transferred.
+
+        Returns:
+            A wrapper responsible for freeing the allocation exactly once.
+
+        Raises:
+            ValueError: The supplied native pointer is null.
         """
 
-        self.__ptr = ptr
+        if not pointer:
+            raise ValueError("Cannot adopt a null Archive pointer.")
+        result = cls.__new__(cls)
+        result.__ptr = pointer
+        return result
 
     def __check_open(self) -> int:
-        """
-        Return the native pointer, raising if the handle has been closed.
+        """Return the native pointer, raising if the handle has been closed.
 
         Returns:
             int: Valid native pointer.
@@ -122,8 +76,7 @@ class Archive:
 
     @classmethod
     def open(cls, path: Path) -> Archive:
-        """
-        Open an archive file from disk.
+        """Open an archive file from disk.
 
         Args:
             path (Path): Filesystem path to the ``.bsa`` or ``.ba2`` file.
@@ -139,18 +92,20 @@ class Archive:
         ptr = lib.bethkit_archive_open(_ffi.enc(path))
         if not ptr:
             _ffi.raise_last_error(lib)
-        return cls(ptr)
+        return _ownership.adopt_native(
+            ptr, cls._from_native, lib.bethkit_archive_free
+        )
 
     def close(self) -> None:
-        """
-        Release the native archive handle.
+        """Release the native archive handle.
 
         Safe to call multiple times; subsequent calls are no-ops.
         """
 
         if self.__ptr:
-            _ffi.load_lib().bethkit_archive_free(self.__ptr)
+            pointer = self.__ptr
             self.__ptr = 0
+            _ffi.load_lib().bethkit_archive_free(pointer)
 
     def _check_borrowed(self) -> None:
         """Checks whether the archive still owns its borrowed entries.
@@ -162,28 +117,35 @@ class Archive:
         self.__check_open()
 
     def __enter__(self) -> Archive:
-        """Return *self* for use as a context manager."""
+        """Returns this open owner for use as a context manager.
 
+        Returns:
+            This instance, valid until the context exits or it is closed.
+
+        Raises:
+            BethkitClosedError: This owner is already closed or transferred.
+        """
+
+        self.__check_open()
         return self
 
     def __exit__(self, *_: object) -> None:
-        """Close the archive when exiting the context."""
+        """Close the archive when exiting the context.
+
+        Args:
+            *_: Exception details supplied by the context manager protocol.
+        """
 
         self.close()
 
     def __del__(self) -> None:
         """Free the native handle on garbage collection."""
 
-        try:
-            self.close()
-        except Exception:
-            pass
+        _ownership.finalize(self.close, self.log)
 
     @property
     def format_name(self) -> str:
-        """
-        Human-readable name of the archive format (e.g. ``"BSA"`` or
-        ``"BA2"``).
+        """Human-readable archive format, such as ``"BSA"`` or ``"BA2"``.
 
         Returns:
             str: Format identifier string.
@@ -200,8 +162,7 @@ class Archive:
 
     @property
     def file_count(self) -> int:
-        """
-        Total number of file entries in the archive.
+        """Total number of file entries in the archive.
 
         Returns:
             int: Entry count.
@@ -213,8 +174,7 @@ class Archive:
         return _ffi.load_lib().bethkit_archive_file_count(self.__check_open())
 
     def entry_at(self, index: int) -> ArchiveEntry:
-        """
-        Return the entry at the given index.
+        """Return the entry at the given index.
 
         Args:
             index (int): Zero-based entry index.
@@ -231,11 +191,10 @@ class Archive:
         ptr = lib.bethkit_archive_entry_get(self.__check_open(), index)
         if not ptr:
             _ffi.raise_last_error(lib)
-        return ArchiveEntry(ptr, self)
+        return ArchiveEntry._from_native(ptr, self)
 
     def entries(self) -> Iterator[ArchiveEntry]:
-        """
-        Iterate over all entries in the archive.
+        """Iterate over all entries in the archive.
 
         Yields:
             ArchiveEntry: Each entry in insertion order.
@@ -248,8 +207,7 @@ class Archive:
             yield self.entry_at(i)
 
     def extract(self, path: str) -> Optional[bytes]:
-        """
-        Extract a single file from the archive by its virtual path.
+        """Extract a single file from the archive by its virtual path.
 
         Returns ``None`` when the path is not found.
 
@@ -285,8 +243,7 @@ class Archive:
             lib.bethkit_bytes_free(ptr, out_len.value)
 
     def extract_required(self, path: str) -> bytes:
-        """
-        Extract a single file, raising when the path is not found.
+        """Extract a single file, raising when the path is not found.
 
         Args:
             path (str): Virtual path of the entry to extract.
@@ -306,8 +263,7 @@ class Archive:
         return data
 
     def extract_to_file(self, path: str, dest: Path) -> None:
-        """
-        Extract a single entry and write it to *dest* on disk.
+        """Extract a single entry and write it to *dest* on disk.
 
         Args:
             path (str): Virtual path of the entry to extract.
@@ -326,7 +282,8 @@ class Archive:
             _ffi.raise_last_error(lib)
 
     def __repr__(self) -> str:
-        """
+        """Returns a concise diagnostic representation.
+
         Returns:
             str: Developer-friendly representation showing format and count.
         """
@@ -334,387 +291,3 @@ class Archive:
         if not self.__ptr:
             return "<Archive closed>"
         return f"<Archive format={self.format_name!r} files={self.file_count}>"
-
-
-class BsaWriter:
-    """
-    Builder for Bethesda Softworks Archive (BSA) files.
-
-    Create a writer, add files, then call :meth:`write_to` to produce
-    the BSA on disk.  Use as a context manager to ensure the native
-    handle is released::
-
-        with BsaWriter(BsaVersion.SSE) as w:
-            w.add("meshes/foo.nif", data)
-            w.write_to(output_path)
-    """
-
-    __ptr: int
-
-    def __init__(self, version: BsaVersion) -> None:
-        """
-        Args:
-            version (BsaVersion): BSA format version to write.
-
-        Raises:
-            BethkitNativeError: If the native writer cannot be created.
-        """
-
-        lib = _ffi.load_lib()
-        ptr = lib.bethkit_bsa_writer_new(int(version))
-        if not ptr:
-            _ffi.raise_last_error(lib)
-        self.__ptr = ptr
-
-    def __check_open(self) -> int:
-        """
-        Return the native pointer, raising if the handle has been closed.
-
-        Returns:
-            int: Valid native pointer.
-
-        Raises:
-            BethkitClosedError: If the writer has been closed.
-        """
-
-        if not self.__ptr:
-            raise BethkitClosedError("BsaWriter is closed")
-        return self.__ptr
-
-    def close(self) -> None:
-        """
-        Release the native writer handle.
-
-        Safe to call multiple times; subsequent calls are no-ops.
-        """
-
-        if self.__ptr:
-            _ffi.load_lib().bethkit_bsa_writer_free(self.__ptr)
-            self.__ptr = 0
-
-    def __enter__(self) -> BsaWriter:
-        """Return *self* for use as a context manager."""
-
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        """Free the writer when exiting the context."""
-
-        self.close()
-
-    def __del__(self) -> None:
-        """Free the native handle on garbage collection."""
-
-        try:
-            self.close()
-        except Exception:
-            pass
-
-    def set_compress(self, compress: bool) -> None:
-        """
-        Enable or disable default compression for entries.
-
-        Args:
-            compress (bool): ``True`` to enable compression by default.
-
-        Raises:
-            BethkitClosedError: If the writer has been closed.
-            BethkitNativeError: If the native call fails.
-        """
-
-        lib = _ffi.load_lib()
-        if (
-            lib.bethkit_bsa_writer_set_compress(self.__check_open(), compress)
-            != 0
-        ):
-            _ffi.raise_last_error(lib)
-
-    def set_embed_names(self, embed: bool) -> None:
-        """
-        Enable or disable embedded file-name strings in the archive.
-
-        Args:
-            embed (bool): ``True`` to embed file names.
-
-        Raises:
-            BethkitClosedError: If the writer has been closed.
-            BethkitNativeError: If the native call fails.
-        """
-
-        lib = _ffi.load_lib()
-        if (
-            lib.bethkit_bsa_writer_set_embed_names(self.__check_open(), embed)
-            != 0
-        ):
-            _ffi.raise_last_error(lib)
-
-    def add(self, path: str, data: bytes) -> None:
-        """
-        Add a file to the archive.
-
-        Args:
-            path (str): Virtual path used to store the file inside the
-                archive.
-            data (bytes): File contents.
-
-        Raises:
-            BethkitClosedError: If the writer has been closed.
-            BethkitNativeError: If the entry cannot be added.
-        """
-
-        lib = _ffi.load_lib()
-        buf = _buf_from_bytes(data)
-        if (
-            lib.bethkit_bsa_writer_add(
-                self.__check_open(), _ffi.senc(path), buf, len(data)
-            )
-            != 0
-        ):
-            _ffi.raise_last_error(lib)
-
-    def write_to(self, dest: Path) -> None:
-        """
-        Finalise and write the archive to disk.
-
-        Args:
-            dest (Path): Destination file path.
-
-        Raises:
-            BethkitClosedError: If the writer has been closed.
-            BethkitNativeError: If serialisation or the write fails.
-        """
-
-        lib = _ffi.load_lib()
-        if (
-            lib.bethkit_bsa_writer_write_to(self.__check_open(), _ffi.enc(dest))
-            != 0
-        ):
-            _ffi.raise_last_error(lib)
-
-
-class Ba2GnrlWriter:
-    """
-    Builder for Fallout 4 BA2 general (non-texture) archives.
-
-    Use this for non-texture assets packed in the general BA2 format.
-    The interface mirrors :class:`BsaWriter`.
-    """
-
-    __ptr: int
-
-    def __init__(self, version: Ba2Version) -> None:
-        """
-        Args:
-            version (Ba2Version): BA2 format version to write.
-
-        Raises:
-            BethkitNativeError: If the native writer cannot be created.
-        """
-
-        lib = _ffi.load_lib()
-        ptr = lib.bethkit_ba2_gnrl_writer_new(int(version))
-        if not ptr:
-            _ffi.raise_last_error(lib)
-        self.__ptr = ptr
-
-    def __check_open(self) -> int:
-        """
-        Return the native pointer, raising if the handle has been closed.
-
-        Returns:
-            int: Valid native pointer.
-
-        Raises:
-            BethkitClosedError: If the writer has been closed.
-        """
-
-        if not self.__ptr:
-            raise BethkitClosedError("Ba2GnrlWriter is closed")
-        return self.__ptr
-
-    def close(self) -> None:
-        """
-        Release the native writer handle.
-
-        Safe to call multiple times; subsequent calls are no-ops.
-        """
-
-        if self.__ptr:
-            _ffi.load_lib().bethkit_ba2_gnrl_writer_free(self.__ptr)
-            self.__ptr = 0
-
-    def __enter__(self) -> Ba2GnrlWriter:
-        """Return *self* for use as a context manager."""
-
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        """Free the writer when exiting the context."""
-
-        self.close()
-
-    def __del__(self) -> None:
-        """Free the native handle on garbage collection."""
-
-        try:
-            self.close()
-        except Exception:
-            pass
-
-    def add(self, path: str, data: bytes) -> None:
-        """
-        Add a file to the archive.
-
-        Args:
-            path (str): Virtual path inside the archive.
-            data (bytes): File contents.
-
-        Raises:
-            BethkitClosedError: If the writer has been closed.
-            BethkitNativeError: If the entry cannot be added.
-        """
-
-        lib = _ffi.load_lib()
-        buf = _buf_from_bytes(data)
-        if (
-            lib.bethkit_ba2_gnrl_writer_add(
-                self.__check_open(), _ffi.senc(path), buf, len(data)
-            )
-            != 0
-        ):
-            _ffi.raise_last_error(lib)
-
-    def write_to(self, dest: Path) -> None:
-        """
-        Finalise and write the archive to disk.
-
-        Args:
-            dest (Path): Destination file path.
-
-        Raises:
-            BethkitClosedError: If the writer has been closed.
-            BethkitNativeError: If serialisation or the write fails.
-        """
-
-        lib = _ffi.load_lib()
-        if (
-            lib.bethkit_ba2_gnrl_writer_write_to(
-                self.__check_open(), _ffi.enc(dest)
-            )
-            != 0
-        ):
-            _ffi.raise_last_error(lib)
-
-
-class Ba2Dx10Writer:
-    """
-    Builder for Fallout 4 BA2 DX10 (texture) archives.
-
-    Use this for texture assets packed in the DX10 BA2 format used by
-    Fallout 4.
-    """
-
-    __ptr: int
-
-    def __init__(self, version: Ba2Version) -> None:
-        """
-        Args:
-            version (Ba2Version): BA2 format version to write.
-
-        Raises:
-            BethkitNativeError: If the native writer cannot be created.
-        """
-
-        lib = _ffi.load_lib()
-        ptr = lib.bethkit_ba2_dx10_writer_new(int(version))
-        if not ptr:
-            _ffi.raise_last_error(lib)
-        self.__ptr = ptr
-
-    def __check_open(self) -> int:
-        """
-        Return the native pointer, raising if the handle has been closed.
-
-        Returns:
-            int: Valid native pointer.
-
-        Raises:
-            BethkitClosedError: If the writer has been closed.
-        """
-
-        if not self.__ptr:
-            raise BethkitClosedError("Ba2Dx10Writer is closed")
-        return self.__ptr
-
-    def close(self) -> None:
-        """
-        Release the native writer handle.
-
-        Safe to call multiple times; subsequent calls are no-ops.
-        """
-
-        if self.__ptr:
-            _ffi.load_lib().bethkit_ba2_dx10_writer_free(self.__ptr)
-            self.__ptr = 0
-
-    def __enter__(self) -> Ba2Dx10Writer:
-        """Return *self* for use as a context manager."""
-
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        """Free the writer when exiting the context."""
-
-        self.close()
-
-    def __del__(self) -> None:
-        """Free the native handle on garbage collection."""
-
-        try:
-            self.close()
-        except Exception:
-            pass
-
-    def add(self, path: str, data: bytes) -> None:
-        """
-        Add a texture file to the archive.
-
-        Args:
-            path (str): Virtual path inside the archive.
-            data (bytes): Raw DDS texture data.
-
-        Raises:
-            BethkitClosedError: If the writer has been closed.
-            BethkitNativeError: If the entry cannot be added.
-        """
-
-        lib = _ffi.load_lib()
-        buf = _buf_from_bytes(data)
-        if (
-            lib.bethkit_ba2_dx10_writer_add(
-                self.__check_open(), _ffi.senc(path), buf, len(data)
-            )
-            != 0
-        ):
-            _ffi.raise_last_error(lib)
-
-    def write_to(self, dest: Path) -> None:
-        """
-        Finalise and write the archive to disk.
-
-        Args:
-            dest (Path): Destination file path.
-
-        Raises:
-            BethkitClosedError: If the writer has been closed.
-            BethkitNativeError: If serialisation or the write fails.
-        """
-
-        lib = _ffi.load_lib()
-        if (
-            lib.bethkit_ba2_dx10_writer_write_to(
-                self.__check_open(), _ffi.enc(dest)
-            )
-            != 0
-        ):
-            _ffi.raise_last_error(lib)

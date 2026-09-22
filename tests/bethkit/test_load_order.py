@@ -9,9 +9,11 @@ from unittest.mock import MagicMock
 
 import pytest
 from conftest import build_minimal_plugin
+from pydantic import ValidationError
 
 from bethkit import (
     BethkitClosedError,
+    BethkitNativeError,
     Game,
     GlobalFormId,
     LoadOrder,
@@ -80,12 +82,40 @@ class TestGlobalFormId:
         gfid = GlobalFormId(plugin_name="A.esp", object_id=1)
 
         # when / then
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             gfid.plugin_name = "B.esp"  # type: ignore[misc]
 
 
 class TestLoadOrder:
     """Tests ``bethkit.load_order.LoadOrder``."""
+
+    def test_failed_creation_never_frees_an_uninitialized_handle(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Leaves a failed native allocation safe for finalizer cleanup."""
+
+        # given
+        mock_lib.bethkit_load_order_new.return_value = 0
+        mock_lib.bethkit_last_error.return_value = b"allocation failed"
+
+        # when / then
+        with pytest.raises(BethkitNativeError, match="allocation failed"):
+            LoadOrder()
+        mock_lib.bethkit_load_order_free.assert_not_called()
+
+    def test_closed_context_entry_is_rejected(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Rejects a closed order before entering its context."""
+
+        # given
+        mock_lib.bethkit_load_order_new.return_value = 0x100
+        order = LoadOrder()
+        order.close()
+
+        # when / then
+        with pytest.raises(BethkitClosedError):
+            order.__enter__()
 
     def test_resolve_with_plugin_uses_master_aware_endpoint(
         self, mock_lib: MagicMock
@@ -95,7 +125,7 @@ class TestLoadOrder:
         # given
         mock_lib.bethkit_load_order_new.return_value = 0x100
         mock_lib.bethkit_load_order_resolve_with_plugin.return_value = 0
-        with Plugin(0x200) as plugin:
+        with Plugin._from_native(0x200) as plugin:
             with LoadOrder() as load_order:
                 # when
                 load_order.resolve(0x123, "test.esp", plugin)
@@ -110,7 +140,7 @@ class TestLoadOrder:
 
         # given
         mock_lib.bethkit_load_order_new.return_value = 0x100
-        plugin = Plugin(0x200)
+        plugin = Plugin._from_native(0x200)
         plugin.close()
 
         # when / then

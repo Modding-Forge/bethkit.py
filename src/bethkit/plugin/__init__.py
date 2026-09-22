@@ -6,10 +6,10 @@ Copyright (c) Modding Forge
 
 from __future__ import annotations
 
-from ..plugin.cache import CacheHit, PluginCache
-from ..plugin.patcher import PluginPatcher
-from ..plugin.plugin import Group, Plugin, Record, SubRecord
-from ..plugin.writer import PluginWriter, WritableGroup, WritableRecord
+from .cache import CacheHit, PluginCache
+from .patcher import PluginPatcher
+from .plugin import Group, Plugin, Record, SubRecord
+from .writer import PluginWriter, WritableGroup, WritableRecord
 
 __all__ = [
     "CacheHit",

@@ -36,11 +36,11 @@ class TestBorrowedLifetimes:
         """Rejects nested access before any native record call."""
 
         # given
-        plugin = Plugin(0x100)
-        group = Group(0x200, plugin)
-        nested = Group(0x300, group)
-        record = Record(0x400, nested)
-        subrecord = SubRecord(0x500, record)
+        plugin = Plugin._from_native(0x100)
+        group = Group._from_native(0x200, plugin)
+        nested = Group._from_native(0x300, group)
+        record = Record._from_native(0x400, nested)
+        subrecord = SubRecord._from_native(0x500, record)
 
         # when
         plugin.close()
@@ -60,8 +60,8 @@ class TestBorrowedLifetimes:
         """Does not dereference a record after its owning plugin closes."""
 
         # given
-        plugin = Plugin(0x100)
-        record = Record(0x200, plugin)
+        plugin = Plugin._from_native(0x100)
+        record = Record._from_native(0x200, plugin)
         mock_lib.bethkit_record_subrecord_count.return_value = 2
         mock_lib.bethkit_record_subrecord_get.return_value = 0x300
         iterator = iter(record)
@@ -81,8 +81,8 @@ class TestBorrowedLifetimes:
         """Prevents archive entry use after its owner closes."""
 
         # given
-        archive = Archive(0x100)
-        entry = ArchiveEntry(0x200, archive)
+        archive = Archive._from_native(0x100)
+        entry = ArchiveEntry._from_native(0x200, archive)
 
         # when
         archive.close()
@@ -104,8 +104,8 @@ class TestBorrowedLifetimes:
         mock_lib.bethkit_plugin_cache_new.return_value = 0x400
         mock_lib.bethkit_plugin_cache_add.return_value = 0
         mock_lib.bethkit_record_form_id.return_value = 0x800
-        plugin = Plugin(0x100)
-        record = Record(0x300, Group(0x200, plugin))
+        plugin = Plugin._from_native(0x100)
+        record = Record._from_native(0x300, Group._from_native(0x200, plugin))
         cache = PluginCache()
 
         # when
@@ -131,8 +131,8 @@ class TestBorrowedLifetimes:
         mock_lib.bethkit_plugin_cache_new.return_value = 0x400
         mock_lib.bethkit_plugin_cache_add.return_value = -1
         mock_lib.bethkit_last_error.return_value = b"invalid plugin"
-        plugin = Plugin(0x100)
-        record = Record(0x300, plugin)
+        plugin = Plugin._from_native(0x100)
+        record = Record._from_native(0x300, plugin)
 
         # when
         with PluginCache() as cache:
@@ -153,7 +153,7 @@ class TestBorrowedLifetimes:
 
         # given
         mock_lib.bethkit_plugin_cache_new.return_value = 0x400
-        plugin = Plugin(0x100)
+        plugin = Plugin._from_native(0x100)
 
         # when
         with PluginCache() as cache:
@@ -188,8 +188,8 @@ class TestWriterTransfers:
         """Retains a writable record if its receiving group is closed."""
 
         # given
-        group = WritableGroup(0x200)
-        record = WritableRecord(0x100)
+        group = WritableGroup._from_native(0x200)
+        record = WritableRecord._from_native(0x100)
         group.close()
 
         # when
@@ -207,7 +207,7 @@ class TestWriterTransfers:
         # given
         mock_lib.bethkit_plugin_writer_new.return_value = 0x300
         writer = PluginWriter(Game.SKYRIM_SE)
-        group = WritableGroup(0x200)
+        group = WritableGroup._from_native(0x200)
         writer.close()
 
         # when
@@ -223,7 +223,7 @@ class TestWriterTransfers:
         """Rejects self-containment before ownership transfer."""
 
         # given
-        group = WritableGroup(0x200)
+        group = WritableGroup._from_native(0x200)
 
         # when
         with pytest.raises(ValueError, match="itself"):

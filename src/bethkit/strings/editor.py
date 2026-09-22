@@ -6,79 +6,19 @@ Copyright (c) Modding Forge
 
 from __future__ import annotations
 
-import hashlib
-import os
-import re
-import tempfile
+import logging
 from collections.abc import Iterator
+from contextlib import ExitStack
 from pathlib import Path
-from typing import Literal, Optional
+from typing import ClassVar, Optional
 
-import pydantic
-
-from .. import _error
+from .. import _error, _ownership
 from ..enums import StringFileKind
 from ..plugin import patcher
 from ..plugin import plugin as plugin_module
 from ..schema import schema
 from ..strings import references, strings
-
-_EXTENSIONS: dict[StringFileKind, str] = {
-    StringFileKind.STRINGS: "STRINGS",
-    StringFileKind.DL_STRINGS: "DLSTRINGS",
-    StringFileKind.IL_STRINGS: "ILSTRINGS",
-}
-
-
-class _BundleFile(pydantic.BaseModel, frozen=True):
-    """Checksum of one complete output artifact."""
-
-    path: str
-    """Bundle-relative file path."""
-    size: int
-    """Encoded byte length."""
-    sha256: str
-    """Checksum of the exact saved bytes."""
-
-
-class _BundleManifest(pydantic.BaseModel, frozen=True):
-    """Describes a jointly published plugin and its string tables."""
-
-    format_version: Literal[1]
-    """Version of this bundle manifest."""
-    plugin: str
-    """Plugin filename inside the bundle."""
-    language: str
-    """Language used for the external string filenames."""
-    schema_payload_sha256: Optional[str]
-    """Schema identity when at least one record was edited."""
-    files: tuple[_BundleFile, ...]
-    """Encoded output files and their integrity hashes."""
-
-
-def _validate_filename(name: str, language: str) -> None:
-    """Rejects output names that could escape or confuse the bundle layout.
-
-    Args:
-        name: Destination plugin basename.
-        language: String table language component.
-
-    Raises:
-        ValueError: Either component is not a safe filename component.
-    """
-
-    if (
-        not name
-        or any(character in '<>:"/\\|?*\0' for character in name)
-        or name != name.strip()
-        or name.endswith(".")
-        or Path(name).suffix.lower() not in {".esp", ".esm", ".esl"}
-    ):
-        raise ValueError(
-            "plugin_name must be a plain ESP, ESM, or ESL filename."
-        )
-    if re.fullmatch(r"[A-Za-z0-9_-]+", language) is None:
-        raise ValueError("language must contain letters, digits, '_' or '-'.")
+from . import _bundle
 
 
 class LocalizationEditor:
@@ -90,6 +30,7 @@ class LocalizationEditor:
     remain unchanged. No original plugin or table is overwritten.
     """
 
+    log: ClassVar[logging.Logger] = logging.getLogger("LocalizationEditor")
     __plugin: plugin_module.Plugin
     __context: schema.SemanticContext
     __tables: Optional[strings.LocalizationSet]
@@ -200,6 +141,7 @@ class LocalizationEditor:
 
         Raises:
             StringTableError: The reference is foreign or its record is absent.
+            BethkitClosedError: A borrowed input is closed.
             BethkitNativeError: The native editor could not be created.
         """
 
@@ -228,8 +170,11 @@ class LocalizationEditor:
 
         Raises:
             BethkitClosedError: The session or a required input is closed.
+            BethkitNativeError: A record snapshot or inline edit failed.
+            RecordDecodeError: The semantic snapshot could not be decoded.
             StringTableError: The reference or external tables are invalid.
             UnsupportedEditError: The address is stale or the edit is unsafe.
+            UnicodeEncodeError: External text cannot be encoded as UTF-8.
             ValueError: Text contains a NUL character.
         """
 
@@ -308,7 +253,7 @@ class LocalizationEditor:
             if self.__localized and self.__tables is not None:
                 self.__table_bytes = {
                     kind: self.__tables.table_to_bytes(kind)
-                    for kind in _EXTENSIONS
+                    for kind in _bundle.EXTENSIONS
                 }
             self.__plugin_bytes = native_patcher.write_to_bytes()
             return self.__plugin_bytes
@@ -348,60 +293,37 @@ class LocalizationEditor:
         """
 
         self.__check_open()
-        _validate_filename(plugin_name, language)
+        _bundle.validate_filename(plugin_name, language)
         destination = output_dir.absolute()
         if destination.exists():
             raise FileExistsError(destination)
         plugin_bytes = self.__finalize()
-        payloads = {plugin_name: plugin_bytes}
-        stem = Path(plugin_name).stem
-        for kind, data in self.__table_bytes.items():
-            payloads[f"Strings/{stem}_{language}.{_EXTENSIONS[kind]}"] = data
-        manifest = _BundleManifest(
-            format_version=1,
-            plugin=plugin_name,
-            language=language,
-            schema_payload_sha256=self.__schema_hash,
-            files=tuple(
-                _BundleFile(
-                    path=name,
-                    size=len(data),
-                    sha256=hashlib.sha256(data).hexdigest(),
-                )
-                for name, data in sorted(payloads.items())
-            ),
+        return _bundle.publish(
+            destination,
+            plugin_name,
+            language,
+            plugin_bytes,
+            self.__table_bytes,
+            self.__schema_hash,
         )
-        payloads["manifest.json"] = manifest.model_dump_json(
-            indent=4, by_alias=True, exclude_defaults=True
-        ).encode("utf-8")
-        with tempfile.TemporaryDirectory(
-            prefix=f".{destination.name}-", dir=destination.parent
-        ) as temporary:
-            staging = Path(temporary)
-            for name, data in payloads.items():
-                file_path = staging / name
-                file_path.parent.mkdir(parents=True, exist_ok=True)
-                with file_path.open("xb") as output:
-                    output.write(data)
-                    output.flush()
-                    os.fsync(output.fileno())
-            if destination.exists():
-                raise FileExistsError(destination)
-            staging.rename(destination)
-        return destination
 
     def close(self) -> None:
-        """Discards private edits and releases only session-owned resources."""
+        """Discards private edits and releases only session-owned resources.
+
+        All owned handles are cleaned up even if one destructor fails.
+        Subsequent calls are safe no-ops.
+        """
 
         if self.__closed:
             return
         self.__closed = True
-        for editor in self.__editors.values():
-            editor.close()
-        if self.__patcher is not None:
-            self.__patcher.close()
-        if self.__tables is not None:
-            self.__tables.close()
+        with ExitStack() as cleanup:
+            for editor in self.__editors.values():
+                cleanup.callback(editor.close)
+            if self.__patcher is not None:
+                cleanup.callback(self.__patcher.close)
+            if self.__tables is not None:
+                cleanup.callback(self.__tables.close)
 
     def __enter__(self) -> LocalizationEditor:
         """Returns this open session for context-managed cleanup.
@@ -417,14 +339,15 @@ class LocalizationEditor:
         return self
 
     def __exit__(self, *_: object) -> None:
-        """Discards native working state when leaving the context."""
+        """Discards native working state when leaving the context.
+
+        Args:
+            *_: Exception information supplied by the context manager.
+        """
 
         self.close()
 
     def __del__(self) -> None:
         """Performs best-effort cleanup of an abandoned session."""
 
-        try:
-            self.close()
-        except Exception:
-            pass
+        _ownership.finalize(self.close, self.log)

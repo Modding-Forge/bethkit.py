@@ -10,6 +10,7 @@ import ast
 import ctypes
 import os
 import platform
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -55,14 +56,14 @@ def _required_symbols(root: Path) -> set[str]:
         The complete set of native function names used by the bindings.
     """
 
-    declarations = root / "src" / "bethkit" / "_ffi" / "_loader.py"
-    parsed = ast.parse(declarations.read_text(encoding="utf-8"))
+    declarations = root / "src" / "bethkit" / "_ffi"
     return {
         node.attr
-        for node in ast.walk(parsed)
+        for path in declarations.rglob("*.py")
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
         if isinstance(node, ast.Attribute)
         and isinstance(node.value, ast.Name)
-        and node.value.id == "lib"
+        and node.value.id in {"lib", "loaded"}
         and node.attr.startswith("bethkit_")
     }
 
@@ -152,6 +153,41 @@ def _validate_library(path: Path, root: Path) -> None:
         ) from error
 
 
+def _validate_file_lengths(root: Path) -> None:
+    """Blocks every build variant when the source violates its line policy.
+
+    Args:
+        root: Project or extracted source-distribution directory.
+
+    Raises:
+        RuntimeError: The checker is missing, cannot run, or rejects the source.
+    """
+
+    checker = root / "scripts" / "check_file_lengths.py"
+    if not checker.is_file():
+        raise RuntimeError(
+            f"Required file-length checker is missing: {checker}"
+        )
+    try:
+        result = subprocess.run(
+            [sys.executable, str(checker), "--root", str(root)],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+    except OSError as error:
+        raise RuntimeError(
+            "Cannot execute the file-length policy check."
+        ) from error
+    if result.returncode:
+        details = "\n".join(
+            value.strip() for value in (result.stdout, result.stderr) if value
+        )
+        raise RuntimeError(f"File-length policy blocks this build:\n{details}")
+
+
 class CustomBuildHook(BuildHookInterface[BuilderConfig]):
     """Bundles validated native libraries into non-editable platform wheels."""
 
@@ -163,12 +199,25 @@ class CustomBuildHook(BuildHookInterface[BuilderConfig]):
             build_data: Hatch's extensible build metadata dictionary.
 
         Raises:
-            RuntimeError: No compatible native library can be bundled.
+            RuntimeError: Source length policy or native compatibility fails.
         """
 
+        root = Path(self.root).resolve()
+        _validate_file_lengths(root)
+        if self.target_name == "sdist":
+            # Source-only builds must retain the same gate without Git metadata.
+            includes = build_data.setdefault("force_include", {})
+            for relative in (
+                "scripts/hatch_build.py",
+                "scripts/check_file_lengths.py",
+                "scripts/_file_length_text.py",
+                "scripts/_file_length_archive.py",
+                "file-length-policy.json",
+            ):
+                includes[str(root / relative)] = relative
+            return
         if self.target_name != "wheel" or version == "editable":
             return
-        root = Path(self.root).resolve()
         configured = os.environ.get("BETHKIT_LIB")
         library = (
             Path(configured)

@@ -14,7 +14,7 @@ Obtain the Skyrim SE schema using the native repository's `scripts/Get-SkyrimSeS
 uv sync --extra dev
 uv run ruff check src/ tests/ scripts/
 uv run ruff format --check src/ tests/ scripts/
-uv run pyright src/ tests/
+uv run pyright src/ tests/ scripts/
 uv run pytest tests/ --require-native
 uv run python scripts/generate_records.py --schema "$BETHKIT_SCHEMA" --output src/bethkit/records/skyrim_se --check
 uv build --wheel
@@ -25,6 +25,16 @@ The commands above use shell-style environment expansion. In PowerShell, use `$e
 Unit tests can run independently with `uv run pytest tests/ -m "not integration"`. CI and release validation must use `--require-native`: missing libraries, incompatible ABI versions, and absent exports are failures, not skipped integration tests. Distribution wheels require a compatible native library with embedded Skyrim SE schemas. Editable development installs such as `uv sync --extra dev`, and source distributions, do not validate or bundle native libraries; this allows environment setup and mocked unit tests before the native build. The build hook includes the selected library directly in distribution wheels and never overwrites or deletes an existing copy in `src/bethkit/`.
 
 ## CI and publication
+
+All maintained text files have a hard limit of 400 lines. A generated file may exceed that limit only when its exact path, explicit maximum, and justification are approved in `file-length-policy.json`; there are no directory-wide or automatic exceptions. Run `python scripts/check_file_lengths.py` to check the working tree before building. CI and tagged releases check the committed snapshot before installing dependencies or preparing native artifacts.
+
+The same gate runs inside Hatch before every wheel, editable install, and source-distribution build. Source archives include the checker, its helpers, and the policy so builds without Git metadata remain subject to the limit. Editable installs still need no native library, but they cannot bypass source-quality checks.
+
+Install the local commit and push guards once per clone using `python scripts/install_git_hooks.py`, or `uv run python scripts/install_git_hooks.py` after dependency setup. The installer records that Python executable in the local `bethkit.policyPython` setting and enables `.githooks` through `core.hooksPath`. It refuses to replace another hook manager or active default hooks. Re-run it with a working Python 3.10+ interpreter if that interpreter is later moved or removed. On POSIX systems it also makes the hook launchers executable; preserve their executable Git file mode when committing them.
+
+The commit guard checks the staged index, not unrelated working-tree edits. The push guard checks every outgoing commit and each updated destination tip, including tags. Deletions do not introduce code and are skipped. New branches and tags use freshly advertised destination refs, not cached remote-tracking refs, to identify history already on the server. This requires network access; if an advertised commit is unavailable locally, fetch that destination's heads and tags before retrying. Repositories first pushed to a new destination must satisfy the policy throughout their outgoing history. Existing files over the limit remain failures until they are split or an individual generated-file exception is explicitly approved; installing hooks does not grant exemptions. Local Git hooks can be bypassed deliberately, so CI remains the shared enforcement boundary.
+
+The GitHub `master` branch requires the `File length policy` check from GitHub Actions, including for administrators. Force pushes and branch deletion are disabled. Changes without a successful required check must be validated on a branch or pull request before entering `master`; changing this repository does not itself configure protection for another fork.
 
 Regular CI builds exactly the pinned native commit from source on Windows and Linux, obtains the checksum-pinned schema, runs native integration, verifies generated Python models, and builds platform wheels. A commit that exists only locally must be pushed to the native repository before remote CI can check it out; updating the pin does not upload or publish anything.
 

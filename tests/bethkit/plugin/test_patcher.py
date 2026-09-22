@@ -31,7 +31,7 @@ class TestPluginPatcher:
 
         # given
         mock_lib.bethkit_plugin_patcher_new.return_value = 0x200
-        source = Plugin(0x100)
+        source = Plugin._from_native(0x100)
 
         # when
         patcher = PluginPatcher(source)
@@ -52,9 +52,9 @@ class TestPluginPatcher:
         # given
         mock_lib.bethkit_plugin_patcher_new.return_value = 0x200
         mock_lib.bethkit_plugin_patcher_replace_record.return_value = 0
-        with Plugin(0x100) as source:
+        with Plugin._from_native(0x100) as source:
             with PluginPatcher(source) as patcher:
-                replacement = WritableRecord(0x300)
+                replacement = WritableRecord._from_native(0x300)
 
                 # when
                 patcher.replace_record(0x800, replacement)
@@ -75,9 +75,9 @@ class TestPluginPatcher:
         mock_lib.bethkit_plugin_patcher_new.return_value = 0x200
         mock_lib.bethkit_plugin_patcher_replace_record.return_value = -1
         mock_lib.bethkit_last_error.return_value = b"record not found"
-        with Plugin(0x100) as source:
+        with Plugin._from_native(0x100) as source:
             with PluginPatcher(source) as patcher:
-                with WritableRecord(0x300) as replacement:
+                with WritableRecord._from_native(0x300) as replacement:
                     # when / then
                     with pytest.raises(BethkitNativeError, match="not found"):
                         patcher.replace_record(0x800, replacement)
@@ -107,7 +107,7 @@ class TestPluginPatcher:
             return 0
 
         mock_lib.bethkit_plugin_patcher_write_to_bytes.side_effect = write_bytes
-        with Plugin(0x100) as source:
+        with Plugin._from_native(0x100) as source:
             with PluginPatcher(source) as patcher:
                 # when
                 result = patcher.write_to_bytes()
@@ -126,7 +126,7 @@ class TestPluginPatcher:
         mock_lib.bethkit_plugin_patcher_new.return_value = 0x200
         mock_lib.bethkit_plugin_patcher_write_to_bytes.return_value = 0
         mocker.patch("ctypes.string_at", side_effect=MemoryError)
-        with Plugin(0x100) as source:
+        with Plugin._from_native(0x100) as source:
             with PluginPatcher(source) as patcher:
                 # when / then
                 with pytest.raises(MemoryError):
@@ -140,7 +140,7 @@ class TestPluginPatcher:
 
         # given
         mock_lib.bethkit_plugin_patcher_new.return_value = 0x200
-        with Plugin(0x100) as source:
+        with Plugin._from_native(0x100) as source:
             patcher = PluginPatcher(source)
         patcher.close()
 
@@ -149,7 +149,7 @@ class TestPluginPatcher:
             patcher.write_to_bytes()
         with pytest.raises(BethkitClosedError):
             patcher.write_to_file(tmp_path / "test.esp")
-        with WritableRecord(0x300) as replacement:
+        with WritableRecord._from_native(0x300) as replacement:
             with pytest.raises(BethkitClosedError):
                 patcher.replace_record(0x800, replacement)
         mock_lib.bethkit_plugin_patcher_write_to_bytes.assert_not_called()
@@ -160,7 +160,7 @@ class TestPluginPatcher:
         """Prevents constructing a patcher from freed source memory."""
 
         # given
-        source = Plugin(0x100)
+        source = Plugin._from_native(0x100)
         source.close()
 
         # when / then
@@ -177,7 +177,7 @@ class TestPluginPatcher:
         mock_lib.bethkit_plugin_patcher_new.return_value = 0x200
         mock_lib.bethkit_plugin_patcher_write_to_file.return_value = 0
         path = tmp_path / "test.esp"
-        with Plugin(0x100) as source:
+        with Plugin._from_native(0x100) as source:
             with PluginPatcher(source) as patcher:
                 # when
                 patcher.write_to_file(path)

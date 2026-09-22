@@ -6,7 +6,21 @@ on:
       - "v*"
 
 jobs:
+  file-length-policy:
+    name: File length policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Enforce the 400-line file policy before installing dependencies
+        run: python scripts/check_file_lengths.py --revision HEAD
+
   build:
+    needs: file-length-policy
     name: Build (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
     strategy:
