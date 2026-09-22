@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
-
-Lazy immutable record models and their typed structural field references.
 """
+
+# Lazy immutable record models and their typed structural field references.
 
 from __future__ import annotations
 
@@ -91,7 +91,9 @@ class FieldRef(FieldReference, Generic[_T], frozen=True):
 class StructModel(pydantic.BaseModel, frozen=True):
     """Base of generated, immutable payload and grammar models."""
 
-    model_config = pydantic.ConfigDict(extra="forbid")
+    model_config = pydantic.ConfigDict(
+        extra="forbid", protected_namespaces=("model_validate", "model_dump")
+    )
     _schema_path: ClassVar[str] = ""
     _grammar: ClassVar[bool] = False
     _bindings: ClassVar[dict[str, Binding]] = {}

@@ -25,7 +25,7 @@ classifiers = [
     "Topic :: Games/Entertainment",
     "Topic :: Software Development :: Libraries",
 ]
-dependencies = ["pydantic>=2.0"]
+dependencies = ["pydantic>=2.5.3,<3"]
 authors = [{ name = "Modding Forge", email = "info@moddingforge.com" }]
 
 [project.urls]
