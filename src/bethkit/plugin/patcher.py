@@ -1,16 +1,17 @@
-"""Minimal-change writing of an existing plugin.
-
+"""
 Copyright (c) Modding Forge
 """
+
+# Minimal-change writing of an existing plugin.
 
 from __future__ import annotations
 
 import ctypes
 from pathlib import Path
 
-from bethkit import _error, _ffi
-from bethkit.plugin import plugin as plugin_module
-from bethkit.plugin import writer
+from .. import _error, _ffi
+from ..plugin import plugin as plugin_module
+from ..plugin import writer
 
 
 class PluginPatcher:

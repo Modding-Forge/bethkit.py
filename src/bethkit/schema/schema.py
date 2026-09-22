@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
-
-Versioned schema packages and semantic record views.
 """
+
+# Versioned schema packages and semantic record views.
 
 from __future__ import annotations
 

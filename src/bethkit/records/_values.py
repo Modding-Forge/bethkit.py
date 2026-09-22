@@ -1,7 +1,8 @@
-"""Typed scalar values shared by generated game models.
-
+"""
 Copyright (c) Modding Forge
 """
+
+# Typed scalar values shared by generated game models.
 
 from __future__ import annotations
 
@@ -36,6 +37,7 @@ class OpenIntEnum(enum.IntEnum):
         Returns:
             An unnamed member, or None for a non-integer input.
         """
+
         if not isinstance(value, int) or isinstance(value, bool):
             return None
         member = int.__new__(cls, value)

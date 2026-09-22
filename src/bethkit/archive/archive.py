@@ -9,9 +9,9 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Optional
 
-from bethkit import _ffi, _ownership
-from bethkit._error import BethkitClosedError, BethkitNotFoundError
-from bethkit.enums import Ba2Version, BsaVersion
+from .. import _ffi, _ownership
+from .._error import BethkitClosedError, BethkitNotFoundError
+from ..enums import Ba2Version, BsaVersion
 
 
 def _buf_from_bytes(data: bytes) -> ctypes.Array[ctypes.c_uint8]:

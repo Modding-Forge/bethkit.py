@@ -1,7 +1,8 @@
-"""Checks positional text editing and coordinated output publication.
-
+"""
 Copyright (c) Modding Forge
 """
+
+# Checks positional text editing and coordinated output publication.
 
 from __future__ import annotations
 

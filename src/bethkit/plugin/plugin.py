@@ -10,13 +10,13 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from bethkit import _ffi, _ownership
-from bethkit._error import BethkitClosedError, BethkitNativeError
-from bethkit.enums import Game, PluginKind
+from .. import _ffi, _ownership
+from .._error import BethkitClosedError, BethkitNativeError
+from ..enums import Game, PluginKind
 
 if TYPE_CHECKING:
-    from bethkit.schema import SemanticContext
-    from bethkit.strings import LocalizationSet, StringReference
+    from ..schema import SemanticContext
+    from ..strings import LocalizationSet, StringReference
 
 
 class SubRecord(_ownership.BorrowedHandle):
@@ -683,7 +683,7 @@ class Plugin:
             StringTableError: A supplied table cannot resolve a string ID.
         """
 
-        from bethkit.strings import references
+        from ..strings import references
 
         return references.iter_strings(self, context, tables)
 

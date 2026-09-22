@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
-
-Unit tests for immutable generated views without loading a native library.
 """
+
+# Unit tests for immutable generated views without loading a native library.
 
 from __future__ import annotations
 

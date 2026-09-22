@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
-
-Generates statically typed record views from a native schema export.
 """
+
+# Generates statically typed record views from a native schema export.
 
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ from bethkit.records import _schema
 
 _HEADER = '''"""
 Copyright (c) Modding Forge
-
-Generated from the pinned xEdit/Bethkit schema. Do not edit.
 """
+
+# Generated from the pinned xEdit/Bethkit schema. Do not edit.
 
 from __future__ import annotations
 
@@ -420,9 +420,9 @@ def generate(graph: _schema.SchemaGraph) -> dict[str, str]:
     init = [
         '"""',
         "Copyright (c) Modding Forge",
-        "",
-        "Lazily loaded Skyrim SE record models generated from xEdit.",
         '"""',
+        "",
+        "# Lazily loaded Skyrim SE record models generated from xEdit.",
         "",
         "from __future__ import annotations",
         "",
@@ -521,7 +521,9 @@ def normalized_files(files: dict[str, str], ruff: Path) -> dict[str, str]:
 def main() -> None:
     """Loads one native schema and regenerates or verifies its Python models."""
 
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description="Generate typed record views from a pinned native schema."
+    )
     parser.add_argument("--schema", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--check", action="store_true")

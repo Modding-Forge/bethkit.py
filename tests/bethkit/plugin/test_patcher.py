@@ -1,7 +1,8 @@
-"""Tests native patcher ownership and minimal-change serialization.
-
+"""
 Copyright (c) Modding Forge
 """
+
+# Tests native patcher ownership and minimal-change serialization.
 
 from __future__ import annotations
 

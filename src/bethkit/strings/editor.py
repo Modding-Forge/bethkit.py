@@ -1,7 +1,8 @@
-"""Coordinated, copy-on-write plugin and localization editing.
-
+"""
 Copyright (c) Modding Forge
 """
+
+# Coordinated, copy-on-write plugin and localization editing.
 
 from __future__ import annotations
 
@@ -15,12 +16,12 @@ from typing import Literal, Optional
 
 import pydantic
 
-from bethkit import _error
-from bethkit.enums import StringFileKind
-from bethkit.plugin import patcher
-from bethkit.plugin import plugin as plugin_module
-from bethkit.schema import schema
-from bethkit.strings import references, strings
+from .. import _error
+from ..enums import StringFileKind
+from ..plugin import patcher
+from ..plugin import plugin as plugin_module
+from ..schema import schema
+from ..strings import references, strings
 
 _EXTENSIONS: dict[StringFileKind, str] = {
     StringFileKind.STRINGS: "STRINGS",

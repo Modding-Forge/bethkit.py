@@ -1,7 +1,8 @@
-"""Position-based references to inline and externally localized strings.
-
+"""
 Copyright (c) Modding Forge
 """
+
+# Position-based references to inline and externally localized strings.
 
 from __future__ import annotations
 
@@ -11,12 +12,12 @@ from typing import Literal, Optional
 
 import pydantic
 
-from bethkit import _error
-from bethkit.enums import StringFileKind
-from bethkit.plugin import plugin as plugin_module
-from bethkit.records import _wire
-from bethkit.schema import schema
-from bethkit.strings import strings
+from .. import _error
+from ..enums import StringFileKind
+from ..plugin import plugin as plugin_module
+from ..records import _wire
+from ..schema import schema
+from ..strings import strings
 
 _TABLE_KINDS: dict[str, StringFileKind] = {
     "strings": StringFileKind.STRINGS,

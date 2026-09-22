@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
-
-Regression cases for exact union selection and schema-provided field names.
 """
+
+# Regression cases for exact union selection and schema-provided field names.
 
 from __future__ import annotations
 

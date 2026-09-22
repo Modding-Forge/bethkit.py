@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
-
-Archive subpackage — reading and writing BSA and BA2 archive files.
 """
+
+# Archive subpackage — reading and writing BSA and BA2 archive files.
 
 from __future__ import annotations
 

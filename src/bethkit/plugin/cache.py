@@ -9,11 +9,11 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
-from bethkit import _ffi
-from bethkit._error import BethkitClosedError, BethkitOwnershipError
-from bethkit._ffi import BethkitGlobalFormId
-from bethkit.load_order import GlobalFormId
-from bethkit.plugin import plugin as plugin_module
+from .. import _ffi
+from .._error import BethkitClosedError, BethkitOwnershipError
+from .._ffi import BethkitGlobalFormId
+from ..load_order import GlobalFormId
+from ..plugin import plugin as plugin_module
 
 
 def _require_plugin(value: object) -> plugin_module.Plugin:

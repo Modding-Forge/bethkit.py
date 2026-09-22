@@ -1,4 +1,8 @@
-"""ctypes Structure and Union definitions mirroring bethkit.h."""
+"""
+Copyright (c) Modding Forge
+"""
+
+# ctypes Structure and Union definitions mirroring bethkit.h.
 
 from __future__ import annotations
 

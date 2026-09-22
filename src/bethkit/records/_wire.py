@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
-
-Validated, immutable semantic snapshots at the native JSON boundary.
 """
+
+# Validated, immutable semantic snapshots at the native JSON boundary.
 
 from __future__ import annotations
 

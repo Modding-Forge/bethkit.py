@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from bethkit import _error
+from . import _error
 
 
 class BorrowOwner(Protocol):

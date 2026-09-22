@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
-
-Generated from the pinned xEdit/Bethkit schema. Do not edit.
 """
+
+# Generated from the pinned xEdit/Bethkit schema. Do not edit.
 
 from __future__ import annotations
 

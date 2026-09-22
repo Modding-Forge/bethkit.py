@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
-
-Native integration coverage for generated Skyrim SE records and lossless edits.
 """
+
+# Native coverage for generated Skyrim SE records and lossless edits.
 
 from __future__ import annotations
 

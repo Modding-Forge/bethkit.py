@@ -487,6 +487,8 @@ class TestRecord:
         mock_lib: MagicMock = mocker.MagicMock()
 
         def fake_sig(ptr: int, buf: ctypes.Array[ctypes.c_uint8]) -> int:
+            """Fills a native output buffer with the fixture signature."""
+
             for i, b in enumerate(b"NPC_"):
                 buf[i] = b
             return 0

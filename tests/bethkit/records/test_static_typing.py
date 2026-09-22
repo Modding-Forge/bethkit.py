@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
-
-Static contracts for generated field references and immutable record views.
 """
+
+# Static contracts for generated field references and immutable record views.
 
 from __future__ import annotations
 

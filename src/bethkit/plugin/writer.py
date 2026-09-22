@@ -8,9 +8,9 @@ import ctypes
 from pathlib import Path
 from typing import Optional
 
-from bethkit import _ffi
-from bethkit._error import BethkitClosedError, BethkitOwnershipError
-from bethkit.enums import Game
+from .. import _ffi
+from .._error import BethkitClosedError, BethkitOwnershipError
+from ..enums import Game
 
 _HEDR_VERSION: dict[Game, float] = {
     Game.SKYRIM_SE: 1.7,

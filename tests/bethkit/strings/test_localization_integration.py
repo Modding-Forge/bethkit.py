@@ -1,7 +1,8 @@
-"""Native end-to-end text editing with the pinned Skyrim SE schema.
-
+"""
 Copyright (c) Modding Forge
 """
+
+# Native end-to-end text editing with the pinned Skyrim SE schema.
 
 from __future__ import annotations
 

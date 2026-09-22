@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
-
-Lazily loaded Skyrim SE record models generated from xEdit.
 """
+
+# Lazily loaded Skyrim SE record models generated from xEdit.
 
 from __future__ import annotations
 

@@ -1,1 +1,5 @@
-"""Schema binding tests."""
+"""
+Copyright (c) Modding Forge
+"""
+
+# Schema binding tests.

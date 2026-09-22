@@ -1,7 +1,8 @@
-"""Test fixtures and binary builders.
-
+"""
 Copyright (c) Modding Forge
 """
+
+# Test fixtures and binary builders.
 
 from __future__ import annotations
 

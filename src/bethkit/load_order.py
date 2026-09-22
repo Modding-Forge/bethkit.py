@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING, Annotated, Optional
 
 from pydantic import BaseModel, Field
 
-from bethkit import _ffi
-from bethkit._error import BethkitClosedError
-from bethkit._ffi import BethkitGlobalFormId
-from bethkit.enums import PluginKind
+from . import _ffi
+from ._error import BethkitClosedError
+from ._ffi import BethkitGlobalFormId
+from .enums import PluginKind
 
 if TYPE_CHECKING:
-    from bethkit.plugin.plugin import Plugin
+    from .plugin.plugin import Plugin
 
 
 class GlobalFormId(BaseModel, frozen=True):

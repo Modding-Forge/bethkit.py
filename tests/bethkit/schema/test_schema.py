@@ -1,4 +1,8 @@
-"""Tests for owned ABI-v2 schema handles and immutable models."""
+"""
+Copyright (c) Modding Forge
+"""
+
+# Tests for owned ABI-v2 schema handles and immutable models.
 
 from __future__ import annotations
 
@@ -29,6 +33,7 @@ class _Record:
 
 def test_catalog_embedded_is_owned(mock_lib: MagicMock) -> None:
     """The embedded factory returns a handle that is released on close."""
+
     mock_lib.bethkit_schema_catalog_embedded.return_value = 101
 
     catalog = SchemaCatalog.embedded()
@@ -39,6 +44,7 @@ def test_catalog_embedded_is_owned(mock_lib: MagicMock) -> None:
 
 def test_catalog_package_uses_all_game_enum_values(mock_lib: MagicMock) -> None:
     """Every public game can be requested from the catalog."""
+
     mock_lib.bethkit_schema_catalog_embedded.return_value = 101
     mock_lib.bethkit_schema_catalog_package.return_value = 202
 
@@ -56,6 +62,7 @@ def test_catalog_package_uses_all_game_enum_values(mock_lib: MagicMock) -> None:
 
 def test_semantic_context_owns_native_handle(mock_lib: MagicMock) -> None:
     """A semantic context is independent from its package handle."""
+
     mock_lib.bethkit_schema_package_open.return_value = 202
     mock_lib.bethkit_semantic_context_new.return_value = 303
 
@@ -70,6 +77,7 @@ def test_semantic_context_owns_native_handle(mock_lib: MagicMock) -> None:
 
 def test_diagnostic_is_immutable() -> None:
     """Reader-facing result models reject mutation."""
+
     diagnostic = Diagnostic(
         severity="error",
         code="invalid_payload",
@@ -84,6 +92,7 @@ def test_diagnostic_is_immutable() -> None:
 
 def test_record_editor_sets_and_finishes(mock_lib: MagicMock) -> None:
     """Typed edits delegate to ABI v2 and transfer the writable record."""
+
     mock_lib.bethkit_schema_package_open.return_value = 202
     mock_lib.bethkit_semantic_context_new.return_value = 303
     mock_lib.bethkit_record_editor_new.return_value = 505

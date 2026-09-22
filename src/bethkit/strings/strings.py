@@ -8,9 +8,9 @@ import ctypes
 from pathlib import Path
 from typing import Optional
 
-from bethkit import _ffi
-from bethkit._error import BethkitClosedError
-from bethkit.enums import StringFileKind
+from .. import _ffi
+from .._error import BethkitClosedError
+from ..enums import StringFileKind
 
 
 def _buf_from_bytes(data: bytes) -> ctypes.Array[ctypes.c_uint8]:

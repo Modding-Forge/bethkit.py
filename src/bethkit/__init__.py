@@ -1,25 +1,25 @@
 """
 Copyright (c) Modding Forge
-
-bethkit — Python bindings for the bethkit Bethesda plugin and archive toolkit.
-
-Place ``bethkit_ffi.dll`` (Windows), ``libbethkit_ffi.so`` (Linux), or
-``libbethkit_ffi.dylib`` (macOS) next to this package, or set the
-``BETHKIT_LIB`` environment variable to the full path of the library before
-importing.
-
-Quick example::
-
-    from bethkit import Plugin, Game
-
-    with Plugin.open(Path("MyMod.esp"), Game.SKYRIM_SE) as p:
-        for master in p.masters:
-            print(master)
-        for group in p:
-            for child in group:
-                if hasattr(child, "form_id"):
-                    print(f"0x{child.form_id:08X}", child.editor_id)
 """
+
+# bethkit — Python bindings for the bethkit Bethesda plugin and archive toolkit.
+#
+# Place ``bethkit_ffi.dll`` (Windows), ``libbethkit_ffi.so`` (Linux), or
+# ``libbethkit_ffi.dylib`` (macOS) next to this package, or set the
+# ``BETHKIT_LIB`` environment variable to the full path of the library before
+# importing.
+#
+# Quick example::
+#
+#     from bethkit import Plugin, Game
+#
+#     with Plugin.open(Path("MyMod.esp"), Game.SKYRIM_SE) as p:
+#         for master in p.masters:
+#             print(master)
+#         for group in p:
+#             for child in group:
+#                 if hasattr(child, "form_id"):
+#                     print(f"0x{child.form_id:08X}", child.editor_id)
 
 from __future__ import annotations
 

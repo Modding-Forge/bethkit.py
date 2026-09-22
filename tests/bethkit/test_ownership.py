@@ -1,7 +1,8 @@
-"""Regression tests for native owners and borrowed handle chains.
-
+"""
 Copyright (c) Modding Forge
 """
+
+# Regression tests for native owners and borrowed handle chains.
 
 from __future__ import annotations
 

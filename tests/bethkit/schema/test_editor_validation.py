@@ -1,8 +1,8 @@
 """
 Copyright (c) Modding Forge
-
-Python boundary validation prevents silent ctypes integer truncation.
 """
+
+# Python boundary validation prevents silent ctypes integer truncation.
 
 from unittest.mock import MagicMock
 

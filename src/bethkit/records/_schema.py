@@ -1,7 +1,8 @@
-"""Validated schema graph consumed by the offline model generator.
-
+"""
 Copyright (c) Modding Forge
 """
+
+# Validated schema graph consumed by the offline model generator.
 
 from __future__ import annotations
 
