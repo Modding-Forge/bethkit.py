@@ -4,7 +4,7 @@
 
 Python bindings for [bethkit](https://github.com/Modding-Forge/bethkit), a Rust library for reading and writing Bethesda plugin and archive files. Python provides typed views and editing workflows; Bethkit remains responsible for binary formats, schema interpretation, and lossless writing.
 
-This development branch targets the upcoming Python 2.0 API. The additions below require the native revision pinned in [native-source.json](native-source.json), not the already published Bethkit 0.4.0 binary. See [BUILDING.md](BUILDING.md) for source builds and release gates.
+Python 2.0 uses Bethkit 0.5.0, pinned together with its release artifacts in [native-source.json](native-source.json). Older native binaries, including Bethkit 0.4.0, do not provide all required functions. See [BUILDING.md](BUILDING.md) for source builds and release gates.
 
 ## Features
 
