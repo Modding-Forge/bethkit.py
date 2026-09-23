@@ -6,10 +6,7 @@ Copyright (c) Modding Forge
 
 from __future__ import annotations
 
-import os
 import struct
-from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 from conftest import build_subrecord
@@ -29,7 +26,6 @@ from record_native_support import (
 from bethkit import (
     Game,
     Plugin,
-    SchemaPackage,
     SemanticContext,
     UnsupportedEditError,
 )
@@ -39,37 +35,6 @@ from bethkit.records.skyrim_se import InfoRecord, PerkRecord, QuestRecord
 from bethkit.records.skyrim_se.acti import ActivatorRecord, Type176
 from bethkit.records.skyrim_se.info import Sex9485
 from bethkit.records.skyrim_se.perk import QuestStage5919
-
-
-@pytest.fixture(scope="module")
-def native_schema_context() -> Iterator[SemanticContext]:
-    """Loads the pinned Skyrim SE schema only for native integration tests.
-
-    Yields:
-        Live runtime using the configured or locally built schema.
-    """
-
-    configured = os.environ.get("BETHKIT_SCHEMA")
-    path = (
-        Path(configured)
-        if configured
-        else Path(__file__).resolve().parents[4]
-        / "bethkit"
-        / "target"
-        / "release-schemas"
-        / "skyrim_se.bkschema"
-    )
-    if not path.is_file():
-        if configured:
-            pytest.fail(f"BETHKIT_SCHEMA does not name a schema file: {path}")
-        pytest.skip(
-            "Set BETHKIT_SCHEMA to the pinned Skyrim SE schema package."
-        )
-    with (
-        SchemaPackage.open(path) as package,
-        SemanticContext(package) as context,
-    ):
-        yield context
 
 
 @pytest.mark.integration
