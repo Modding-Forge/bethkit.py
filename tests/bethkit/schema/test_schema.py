@@ -13,6 +13,7 @@ import pytest
 from pydantic import ValidationError
 
 from bethkit import (
+    BethkitNativeError,
     Diagnostic,
     Game,
     RecordEditor,
@@ -90,6 +91,58 @@ class TestSchema:
 
         mock_lib.bethkit_semantic_context_new.assert_called_once_with(202)
         mock_lib.bethkit_semantic_context_free.assert_called_once_with(303)
+
+    def test_semantic_context_selects_inline_utf8(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Checks explicit inline decoding reaches the native context.
+
+        Args:
+            mock_lib: Patched native functions.
+        """
+
+        mock_lib.bethkit_schema_package_open.return_value = 202
+        constructor = mock_lib.bethkit_semantic_context_new_with_inline_encoding
+        constructor.return_value = 303
+
+        with SchemaPackage.open(Path("candidate.bkschema")) as package:
+            with SemanticContext(package, inline_encoding="utf-8"):
+                pass
+
+        constructor.assert_called_once_with(202, 1)
+
+    def test_semantic_context_rejects_unsupported_inline_encoding(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Rejects codecs the native semantic layer cannot represent.
+
+        Args:
+            mock_lib: Patched native functions.
+        """
+
+        mock_lib.bethkit_schema_package_open.return_value = 202
+
+        with SchemaPackage.open(Path("candidate.bkschema")) as package:
+            with pytest.raises(ValueError, match="Unsupported inline encoding"):
+                SemanticContext(package, inline_encoding="shift_jis")
+
+        mock_lib.bethkit_semantic_context_new.assert_not_called()
+
+    def test_semantic_context_requires_new_native_symbol(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Explains an override request against an older native release.
+
+        Args:
+            mock_lib: Patched native functions.
+        """
+
+        mock_lib.bethkit_schema_package_open.return_value = 202
+        del mock_lib.bethkit_semantic_context_new_with_inline_encoding
+
+        with SchemaPackage.open(Path("candidate.bkschema")) as package:
+            with pytest.raises(BethkitNativeError, match="Update the native"):
+                SemanticContext(package, inline_encoding="utf-8")
 
     def test_diagnostic_is_immutable(self) -> None:
         """Reader-facing result models reject mutation."""

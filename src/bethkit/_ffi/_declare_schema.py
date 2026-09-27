@@ -68,6 +68,14 @@ def declare(lib: ctypes.CDLL) -> None:
 
     lib.bethkit_semantic_context_new.restype = ctypes.c_void_p
     lib.bethkit_semantic_context_new.argtypes = [ctypes.c_void_p]
+    if hasattr(lib, "bethkit_semantic_context_new_with_inline_encoding"):
+        lib.bethkit_semantic_context_new_with_inline_encoding.restype = (
+            ctypes.c_void_p
+        )
+        lib.bethkit_semantic_context_new_with_inline_encoding.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+        ]
 
     lib.bethkit_semantic_context_free.restype = None
     lib.bethkit_semantic_context_free.argtypes = [ctypes.c_void_p]
