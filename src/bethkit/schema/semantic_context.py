@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import codecs
 import logging
-from typing import ClassVar, Optional
+from typing import ClassVar, Literal, Optional
 
 from .. import _ffi
 from .._error import BethkitClosedError, BethkitNativeError, RecordDecodeError
@@ -25,7 +25,11 @@ class SemanticContext:
     __pointer: int = 0
 
     def __init__(
-        self, package: SchemaPackage, *, inline_encoding: Optional[str] = None
+        self,
+        package: SchemaPackage,
+        *,
+        inline_encoding: Optional[str] = None,
+        inline_decoding: Literal["schema", "prefer_utf8"] = "schema",
     ) -> None:
         """Creates a runtime that retains its own schema ownership.
 
@@ -34,6 +38,9 @@ class SemanticContext:
             inline_encoding: Optional UTF-8 or Windows-1252 override for
                 schema-localizable text stored directly in the plugin.
                 Technical fields and external tables retain their own codecs.
+            inline_decoding: Per-string decoding policy. The default follows
+                the schema. The opt-in UTF-8 preference is heuristic when
+                legacy bytes also form valid UTF-8.
 
         Raises:
             BethkitClosedError: The package is already closed.
@@ -44,21 +51,32 @@ class SemanticContext:
 
         lib = _ffi.load_lib()
         package_pointer = package._native_pointer()
-        if inline_encoding is None:
+        if inline_decoding not in ("schema", "prefer_utf8"):
+            raise ValueError(
+                f"Unsupported inline decoding: {inline_decoding!r}."
+            )
+        if inline_encoding is not None and inline_decoding != "schema":
+            raise ValueError(
+                "inline_encoding and inline_decoding cannot be combined."
+            )
+        if inline_encoding is None and inline_decoding == "schema":
             pointer = lib.bethkit_semantic_context_new(package_pointer)
         else:
-            encoding_name = codecs.lookup(inline_encoding).name
-            encoding_id = {"utf-8": 1, "cp1252": 2}.get(encoding_name)
-            if encoding_id is None:
-                raise ValueError(
-                    f"Unsupported inline encoding: {inline_encoding!r}."
-                )
+            if inline_encoding is None:
+                encoding_id = 3
+            else:
+                encoding_name = codecs.lookup(inline_encoding).name
+                encoding_id = {"utf-8": 1, "cp1252": 2}.get(encoding_name)
+                if encoding_id is None:
+                    raise ValueError(
+                        f"Unsupported inline encoding: {inline_encoding!r}."
+                    )
             if not hasattr(
                 lib, "bethkit_semantic_context_new_with_inline_encoding"
             ):
                 raise BethkitNativeError(
                     "The native Bethkit library does not support inline "
-                    "encoding overrides. Update the native library."
+                    "encoding policies. Update the native library."
                 )
             pointer = lib.bethkit_semantic_context_new_with_inline_encoding(
                 package_pointer, encoding_id

@@ -96,6 +96,10 @@ class WireScalar(pydantic.BaseModel, frozen=True):
         None
     )
     """Schema-declared external table kind for localized strings."""
+    inline_encoding: Optional[str] = None
+    """Codec selected for schema-localizable inline text."""
+    encoding_source: Optional[Literal["schema", "heuristic", "forced"]] = None
+    """Whether the codec came from the schema, heuristic, or forced policy."""
 
 
 class WireStruct(pydantic.BaseModel, frozen=True):

@@ -18,7 +18,7 @@ from ..plugin import patcher
 from ..plugin import plugin as plugin_module
 from ..schema import schema
 from ..strings import references, strings
-from . import _bundle
+from . import _bundle, _codec_selection
 
 
 class LocalizationEditor:
@@ -161,12 +161,21 @@ class LocalizationEditor:
             self.__editors[form_id] = editor
         return editor
 
-    def replace(self, reference: references.StringReference, text: str) -> None:
+    def replace(
+        self,
+        reference: references.StringReference,
+        text: str,
+        *,
+        inline_encoding: Optional[str] = None,
+    ) -> None:
         """Replaces exactly one string without changing other shared-ID users.
 
         Args:
             reference: Current positional reference from this source plugin.
             text: Replacement Unicode text.
+            inline_encoding: Optional concrete codec for this inline field.
+                Use this when an ambiguous byte sequence needs an explicit
+                encoding choice. Other fields retain their own codecs.
 
         Raises:
             BethkitClosedError: The session or a required input is closed.
@@ -176,6 +185,7 @@ class LocalizationEditor:
             UnsupportedEditError: The address is stale or the edit is unsafe.
             UnicodeEncodeError: External text cannot be encoded as UTF-8.
             ValueError: Text contains a NUL character.
+            LookupError: The selected encoding name is unknown.
         """
 
         self.__check_open(editing=True)
@@ -200,12 +210,19 @@ class LocalizationEditor:
                 "The string address is stale; enumerate strings again."
             )
         self.__schema_hash = current.address.schema_payload_sha256
-        if current.text == text:
+        if current.text == text and inline_encoding is None:
             return
         if current.storage == "inline":
-            editor._set_json(current.address, {"kind": "string", "value": text})
+            if inline_encoding is None:
+                _codec_selection.set_value(editor, current, "string", text)
+            else:
+                _codec_selection.replace(editor, current, text, inline_encoding)
             self.__changed.add(current.address.form_id)
             return
+        if inline_encoding is not None:
+            raise _error.UnsupportedEditError(
+                "External string tables do not use inline encoding overrides."
+            )
         tables = self.__tables
         kind = current.table_kind
         if tables is None or kind is None:
@@ -215,7 +232,7 @@ class LocalizationEditor:
         except _error.BethkitNativeError as exc:
             raise _error.StringTableError(str(exc)) from exc
         try:
-            editor._set_json(current.address, {"kind": "uint", "value": new_id})
+            _codec_selection.set_value(editor, current, "uint", new_id)
         except Exception as edit_error:
             try:
                 tables.remove(kind, new_id)
@@ -226,6 +243,34 @@ class LocalizationEditor:
                 ) from edit_error
             raise
         self.__changed.add(current.address.form_id)
+
+    def select_inline_encoding(
+        self,
+        reference: references.StringReference,
+        encoding: str,
+    ) -> references.StringReference:
+        """Re-decodes one ambiguous inline string without changing its bytes.
+
+        Args:
+            reference: Current positional reference from this source plugin.
+            encoding: Concrete codec for this inline field.
+
+        Returns:
+            A fresh reference with the selected text and codec provenance.
+
+        Raises:
+            BethkitClosedError: The session or a required input is closed.
+            LookupError: The encoding name is unknown.
+            StringTableError: The reference belongs to another source.
+            UnsupportedEditError: The address or codec is invalid.
+            ValueError: The codec is unsupported for inline strings.
+        """
+
+        self.__check_open(editing=True)
+        editor = self.__editor_for(reference)
+        return _codec_selection.select(
+            editor, self.__plugin, self.__tables, reference, encoding
+        )
 
     def __finalize(self) -> bytes:
         """Finalizes validated records once and caches the serialized outputs.

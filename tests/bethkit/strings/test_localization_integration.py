@@ -226,6 +226,61 @@ class TestNativeLocalization:
                 ]
                 assert texts == ["Schöne Grüße"]
 
+    def test_mixed_inline_policy_keeps_legacy_record_bytes(
+        self, tmp_path: Path
+    ) -> None:
+        """Edits UTF-8 text without recoding a legacy sibling record.
+
+        Args:
+            tmp_path: Isolated destination for the edited plugin.
+        """
+
+        # given
+        header = build_record(
+            b"TES4", 0, 0, build_subrecord(b"HEDR", build_hedr(num_records=2))
+        )
+        records = b"".join(
+            build_record(
+                b"CLAS",
+                0x800 + index,
+                0,
+                build_subrecord(b"EDID", f"Class{index}\0".encode("ascii"))
+                + build_subrecord(b"FULL", full),
+            )
+            for index, full in enumerate(
+                ("Grüße".encode() + b"\0", b"T\xfcre\0")
+            )
+        )
+        original = header + build_grup(b"CLAS", 0, records)
+        with (
+            SchemaPackage.open(_schema_path()) as package,
+            SemanticContext(package, inline_decoding="prefer_utf8") as context,
+            Plugin.from_bytes(
+                original, Game.SKYRIM_SE, name="mixed.esp"
+            ) as plugin,
+        ):
+            before = list(plugin.iter_strings(context))
+            assert [reference.text for reference in before] == ["Grüße", "Türe"]
+            assert [reference.encoding_source for reference in before] == [
+                "heuristic",
+                "schema",
+            ]
+
+            # when
+            with LocalizationEditor(plugin, context) as editor:
+                editor.replace(before[0], "Änderung")
+                output = editor.save_bundle(tmp_path / "mixed", "mixed.esp")
+
+            # then
+            content = (output / "mixed.esp").read_bytes()
+            assert "Änderung".encode() + b"\0" in content
+            assert b"T\xfcre\0" in content
+            with Plugin.open(output / "mixed.esp", Game.SKYRIM_SE) as reloaded:
+                assert [
+                    reference.text
+                    for reference in reloaded.iter_strings(context)
+                ] == ["Änderung", "Türe"]
+
     def test_shared_external_id_is_copied_and_saved_with_plugin(
         self, native_context: SemanticContext, tmp_path: Path
     ) -> None:

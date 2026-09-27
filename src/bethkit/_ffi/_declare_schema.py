@@ -183,6 +183,29 @@ def declare(lib: ctypes.CDLL) -> None:
         ctypes.c_char_p,
     ]
 
+    if hasattr(lib, "bethkit_record_editor_set_inline_string_at_json"):
+        lib.bethkit_record_editor_set_inline_string_at_json.restype = (
+            ctypes.c_int32
+        )
+        lib.bethkit_record_editor_set_inline_string_at_json.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_uint32,
+            ctypes.c_char_p,
+        ]
+
+    if hasattr(lib, "bethkit_record_editor_select_inline_encoding_at_json"):
+        lib.bethkit_record_editor_select_inline_encoding_at_json.restype = (
+            ctypes.c_int32
+        )
+        lib.bethkit_record_editor_select_inline_encoding_at_json.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.c_char_p,
+            ctypes.c_uint32,
+        ]
+
     lib.bethkit_record_editor_insert_at_json.restype = ctypes.c_int32
     lib.bethkit_record_editor_insert_at_json.argtypes = [
         ctypes.c_void_p,

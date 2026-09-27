@@ -7,8 +7,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, ClassVar, TypeVar, cast, overload
 
-import pydantic
-
 from .. import _ffi
 from .._error import BethkitClosedError, UnsupportedEditError
 from .._ownership import finalize
@@ -108,6 +106,18 @@ class RecordEditor:
             raise BethkitClosedError("RecordEditor has already been closed.")
         return self.__pointer
 
+    def _borrow_pointer(self) -> int:
+        """Borrows a checked handle for another internal package component.
+
+        Returns:
+            The live native pointer, still owned by this editor.
+
+        Raises:
+            BethkitClosedError: The editor is closed or consumed.
+        """
+
+        return self.__check_open()
+
     @overload
     def set(
         self,
@@ -168,8 +178,10 @@ class RecordEditor:
                 raise UnsupportedEditError(
                     "Select an individual field within the group."
                 )
-            self._set_json(
-                reference.address, _base.encode_replacement(reference, value)
+            _editor_values.set_json(
+                self.__check_open(),
+                reference.address,
+                _base.encode_replacement(reference, value),
             )
             return
         _editor_operations.set_legacy(
@@ -224,25 +236,6 @@ class RecordEditor:
 
         _editor_values.insert(self.__check_open(), path, value)
 
-    def _set_json(
-        self,
-        address: _wire.FieldAddress,
-        value: dict[str, pydantic.JsonValue],
-    ) -> None:
-        """Sends an exact-address replacement through native validation.
-
-        Args:
-            address: Current location and topology guard.
-            value: JSON-compatible tagged replacement.
-
-        Raises:
-            BethkitClosedError: The editor is closed or consumed.
-            UnsupportedEditError: The address or replacement is invalid.
-            ValueError: A floating-point value is not JSON-representable.
-        """
-
-        _editor_values.set_json(self.__check_open(), address, value)
-
     def set_at(
         self, address: _wire.FieldAddress, value: _wire.WireValue
     ) -> None:
@@ -258,8 +251,10 @@ class RecordEditor:
             ValueError: A floating-point value is not JSON-representable.
         """
 
-        self._set_json(
-            address, value.model_dump(mode="json", exclude_none=True)
+        _editor_values.set_json(
+            self.__check_open(),
+            address,
+            value.model_dump(mode="json", exclude_none=True),
         )
 
     def insert_at(

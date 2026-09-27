@@ -1,18 +1,18 @@
 {
   "format_version": 1,
   "repository": "Modding-Forge/bethkit",
-  "revision": "4f8478a117c6ec5f75bde909a977d25fdf817fed",
+  "revision": "03d9b106ab9b41081ed727ce7594410998a48173",
   "schema_sha256": "8066dd6c64fe61583bafe0f8e57c6d78bbaf4d84d41a427fe98d383e976ee092",
   "release": {
-    "tag": "v0.6.0",
+    "tag": "v0.7.0",
     "assets": {
       "windows-x64": {
-        "filename": "bethkit-v0.6.0-windows-x64.zip",
-        "sha256": "4f4bafb2331e31de363f22400b570f99ef3b809b2659acf4b261315c23916360"
+        "filename": "bethkit-v0.7.0-windows-x64.zip",
+        "sha256": "65ec4d568e05cc5c779e39de49beafd6f9682e6ba44f78d60233db522ef2d34c"
       },
       "linux-x64": {
-        "filename": "bethkit-v0.6.0-linux-x64.zip",
-        "sha256": "d28b6345d71327e15aeff4329524ead2527de3337009c2c3bc35e55cf6aeb8dc"
+        "filename": "bethkit-v0.7.0-linux-x64.zip",
+        "sha256": "d72bf12c5abd29329f9863049771eb3c8c16bbcdb55085e3dd4af92212685b18"
       }
     }
   }

@@ -4,7 +4,7 @@
 
 Python bindings for [bethkit](https://github.com/Modding-Forge/bethkit), a Rust library for reading and writing Bethesda plugin and archive files. Python provides typed views and editing workflows; Bethkit remains responsible for binary formats, schema interpretation, and lossless writing.
 
-Python 2.1.0 uses Bethkit 0.6.0, pinned together with its release artifacts in [native-source.json](native-source.json). This version adds an explicit inline-text encoding choice for translations such as the German USSEP ESP. Older native binaries do not provide the required encoding override. See [BUILDING.md](BUILDING.md) for source builds and release gates.
+Python 2.2.0 uses Bethkit 0.7.0, pinned together with its published release archives in [native-source.json](native-source.json). This version supports mixed inline encodings and exact per-field choices for ambiguous text. See [BUILDING.md](BUILDING.md) for source builds and release gates.
 
 ## Features
 
@@ -114,7 +114,7 @@ with SchemaPackage.open(Path("skyrim_se.bkschema")) as package:
 
 For an inline-string plugin, omit `tables`. A string's identity contains its plugin and structural position, never its text or external table ID. Replacing one external string allocates a fresh ID so other users of a shared ID are unchanged. Saving creates a new directory containing the plugin, its `Strings/` files, and a checksum manifest; it never overwrites an installed Data directory.
 
-Bethkit normally uses each schema field's declared encoding for inline text. Some translations, including the German USSEP ESP, store UTF-8 text where the Skyrim SE schema declares Windows-1252. For these plugins, create `SemanticContext(package, inline_encoding="utf-8")` and use that same context for reading and editing. The override applies only to schema-localizable text stored inline; technical fields keep their schema codec, and external string tables have their own encoding option. It requires a native Bethkit build that supports inline encoding overrides.
+Bethkit normally uses each schema field's declared encoding for inline text. For a plugin known to use UTF-8 throughout its translatable inline fields, `SemanticContext(package, inline_encoding="utf-8")` remains an explicit override. For plugins mixing UTF-8 and legacy text, use `SemanticContext(package, inline_decoding="prefer_utf8")`. This opt-in mode checks each translatable inline string separately, falling back to the schema codec when its bytes are not valid UTF-8. `StringReference.encoding` and `encoding_source` report the selected codec and whether it came from the schema or the heuristic. Valid UTF-8 bytes can also be valid legacy bytes, so automatic selection cannot resolve every ambiguous string. For such a field, `LocalizationEditor.select_inline_encoding(reference, "cp1252")` re-decodes it without changing bytes; `replace(reference, text, inline_encoding="cp1252")` selects the codec for an atomic edit. Technical fields and external string tables are unaffected. Mixed decoding requires Bethkit 0.7.0 or newer.
 
 ### Building a plugin from scratch
 
