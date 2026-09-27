@@ -13,6 +13,7 @@ from .. import _ffi, _ownership
 from .._error import BethkitClosedError
 from ..enums import StringFileKind
 from . import _buffer
+from ._encoding import normalize_encoding
 
 
 class StringTable:
@@ -21,9 +22,12 @@ class StringTable:
 
     Supported files are ``.STRINGS``, ``.DLSTRINGS``, and ``.ILSTRINGS``.
 
-    String tables map numeric IDs to UTF-8 string payloads.  They can be
+    String tables map numeric IDs to raw string payloads. They can be
     loaded from disk with :meth:`open`, or created fresh with :meth:`new`
     and written back with :meth:`write_to_file`.
+
+    Decoding via :meth:`get_str` defaults to UTF-8 for compatibility. Supply
+    ``encoding`` to :meth:`open` or :meth:`get_str` for legacy code pages.
 
     Use as a context manager to guarantee that the native handle is
     freed::
@@ -34,6 +38,7 @@ class StringTable:
 
     log: ClassVar[logging.Logger] = logging.getLogger("StringTable")
     __ptr: int = 0
+    __encoding: str = "utf-8"
 
     def __init__(self) -> None:
         """Rejects direct construction; use open() or new() instead.
@@ -45,23 +50,26 @@ class StringTable:
         raise TypeError("Use StringTable.open() or StringTable.new().")
 
     @classmethod
-    def _from_native(cls, pointer: int) -> StringTable:
+    def _from_native(cls, pointer: int, encoding: str = "utf-8") -> StringTable:
         """Adopts a newly allocated, privately owned native handle.
 
         Args:
             pointer: Valid nonzero handle with ownership transferred here.
+            encoding: Codec used when decoding raw string entries.
 
         Returns:
             The sole Python owner of the supplied handle.
 
         Raises:
             ValueError: The supplied pointer is null.
+            LookupError: The codec name is not recognized.
         """
 
         if not pointer:
             raise ValueError("Cannot adopt a null StringTable handle.")
         instance = cls.__new__(cls)
         instance.__ptr = pointer
+        instance.__encoding = normalize_encoding(encoding)
         return instance
 
     def __check_open(self) -> int:
@@ -103,12 +111,13 @@ class StringTable:
         )
 
     @classmethod
-    def open(cls, path: Path) -> StringTable:
+    def open(cls, path: Path, encoding: str = "utf-8") -> StringTable:
         """
         Opens a string table file from disk.
 
         Args:
             path (Path): Filesystem path to the string file.
+            encoding (str): Python codec used by :meth:`get_str`.
 
         Returns:
             StringTable: A new ``StringTable`` loaded from *path*.
@@ -117,6 +126,7 @@ class StringTable:
             BethkitNativeError: If the file cannot be opened or parsed.
             ValueError: The path contains a NUL character.
             UnicodeEncodeError: The path contains an unpaired surrogate.
+            LookupError: The codec name is not recognized.
         """
 
         lib = _ffi.load_lib()
@@ -124,7 +134,9 @@ class StringTable:
         if not ptr:
             _ffi.raise_last_error(lib)
         return _ownership.adopt_native(
-            ptr, cls._from_native, lib.bethkit_string_table_free
+            ptr,
+            lambda native_ptr: cls._from_native(native_ptr, encoding),
+            lib.bethkit_string_table_free,
         )
 
     def close(self) -> None:
@@ -218,12 +230,13 @@ class StringTable:
             return None
         return bytes(ctypes.string_at(ptr, out_len.value))
 
-    def get_str(self, id: int) -> Optional[str]:
+    def get_str(self, id: int, encoding: Optional[str] = None) -> Optional[str]:
         """
-        Retrieves a string entry decoded as UTF-8 by its ID.
+        Retrieves a string using the table's codec or an optional override.
 
         Args:
             id (int): Numeric string ID.
+            encoding (Optional[str]): Optional codec for this string only.
 
         Returns:
             Optional[str]: Decoded string without trailing null, or
@@ -231,13 +244,19 @@ class StringTable:
 
         Raises:
             BethkitClosedError: This table is closed.
-            UnicodeDecodeError: The stored bytes are not valid UTF-8.
+            LookupError: The selected codec name is not recognized.
+            UnicodeDecodeError: The stored bytes are invalid for the codec.
         """
 
         raw = self.get(id)
         if raw is None:
             return None
-        return raw.rstrip(b"\x00").decode("utf-8")
+        codec: str = (
+            self.__encoding
+            if encoding is None
+            else normalize_encoding(encoding)
+        )
+        return raw.rstrip(b"\x00").decode(codec)
 
     def insert(self, id: int, data: bytes) -> None:
         """

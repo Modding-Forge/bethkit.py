@@ -85,6 +85,23 @@ def _plugin_bytes(*, localized: bool) -> bytes:
 class TestNativeLocalization:
     """Exercises the compiled schema, editor, patcher, and string writers."""
 
+    def test_language_code_page_can_be_overridden(self, tmp_path: Path) -> None:
+        """Decodes language tables by locale and honors an explicit codec."""
+
+        # given
+        plugin_path: Path = tmp_path / "test.esp"
+        with LocalizationSet.new() as source:
+            source.set(StringFileKind.STRINGS, 17, b"\x80")
+            source.write(plugin_path, "german")
+
+        # when / then
+        with LocalizationSet.open(plugin_path, "german") as tables:
+            assert tables.get_str(StringFileKind.STRINGS, 17) == "€"
+        with LocalizationSet.open(
+            plugin_path, "german", encoding="latin-1"
+        ) as tables:
+            assert tables.get_str(StringFileKind.STRINGS, 17) == "\x80"
+
     def test_partial_language_pack_uses_strings_subdirectory(
         self, tmp_path: Path
     ) -> None:

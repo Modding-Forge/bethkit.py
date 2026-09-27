@@ -12,21 +12,18 @@ from typing import ClassVar, Optional
 from .. import _ffi, _ownership
 from .._error import BethkitClosedError
 from ..enums import StringFileKind
-from . import _buffer
+from . import _buffer, _table_bytes
+from ._encoding import normalize_encoding, resolve_encoding
 
 
 class LocalizationSet:
     """
-    A combined set of all three localisation tables for a single plugin.
-
-    A :class:`LocalizationSet` bundles the ``.STRINGS``, ``.DLSTRINGS``,
-    and ``.ILSTRINGS`` files for a given language.  Load them together
-    with :meth:`open`, or create an empty set with :meth:`new` and
-    populate it manually.
+    Bundles Bethesda string tables and selects their language code page.
     """
 
     log: ClassVar[logging.Logger] = logging.getLogger("LocalizationSet")
     __ptr: int = 0
+    __encoding: str = "utf-8"
 
     def __init__(self) -> None:
         """Rejects direct construction; use open() or new() instead.
@@ -38,23 +35,28 @@ class LocalizationSet:
         raise TypeError("Use LocalizationSet.open() or LocalizationSet.new().")
 
     @classmethod
-    def _from_native(cls, pointer: int) -> LocalizationSet:
+    def _from_native(
+        cls, pointer: int, encoding: str = "utf-8"
+    ) -> LocalizationSet:
         """Adopts a newly allocated, privately owned native handle.
 
         Args:
             pointer: Valid nonzero handle with ownership transferred here.
+            encoding: Codec used when decoding raw localized strings.
 
         Returns:
             The sole Python owner of the supplied handle.
 
         Raises:
             ValueError: The supplied pointer is null.
+            LookupError: The codec name is not recognized.
         """
 
         if not pointer:
             raise ValueError("Cannot adopt a null LocalizationSet handle.")
         instance = cls.__new__(cls)
         instance.__ptr = pointer
+        instance.__encoding = normalize_encoding(encoding)
         return instance
 
     def __check_open(self) -> int:
@@ -93,19 +95,21 @@ class LocalizationSet:
         )
 
     @classmethod
-    def open(cls, plugin_path: Path, language: str) -> LocalizationSet:
+    def open(
+        cls,
+        plugin_path: Path,
+        language: str,
+        encoding: Optional[str] = None,
+    ) -> LocalizationSet:
         """
-        Loads available localisation files for the plugin and language.
-
-        Files are read from the plugin's sibling ``Strings`` directory:
-        ``Strings/<plugin_stem>_<language>.{STRINGS,DLSTRINGS,ILSTRINGS}``.
-        Each absent file becomes an empty table, allowing partial language
-        packs. Existing but unreadable or malformed files raise an error.
+        Loads available files from the plugin's sibling ``Strings`` directory.
 
         Args:
             plugin_path (Path): Filesystem path to the plugin file.
             language (str): Bethesda filename suffix, such as ``"english"``;
                 this is not a BCP 47 language code.
+            encoding (Optional[str]): Python codec overriding the language's
+                default code page.
 
         Returns:
             LocalizationSet: The loaded set.
@@ -115,6 +119,7 @@ class LocalizationSet:
                 or parsed.
             ValueError: The path or language contains a NUL character.
             UnicodeEncodeError: The path or language is not UTF-8 encodable.
+            LookupError: The selected codec name is not recognized.
         """
 
         lib = _ffi.load_lib()
@@ -124,7 +129,11 @@ class LocalizationSet:
         if not ptr:
             _ffi.raise_last_error(lib)
         return _ownership.adopt_native(
-            ptr, cls._from_native, lib.bethkit_localization_set_free
+            ptr,
+            lambda native_ptr: cls._from_native(
+                native_ptr, resolve_encoding(language, encoding)
+            ),
+            lib.bethkit_localization_set_free,
         )
 
     def close(self) -> None:
@@ -157,7 +166,9 @@ class LocalizationSet:
             _ffi.raise_last_error(lib)
         return _ownership.adopt_native(
             result,
-            LocalizationSet._from_native,
+            lambda native_ptr: LocalizationSet._from_native(
+                native_ptr, self.__encoding
+            ),
             lib.bethkit_localization_set_free,
         )
 
@@ -229,24 +240,7 @@ class LocalizationSet:
             BethkitNativeError: Serialization failed.
         """
 
-        pointer = self.__check_open()
-        lib = _ffi.load_lib()
-        result = ctypes.c_void_p()
-        length = ctypes.c_size_t()
-        if (
-            lib.bethkit_localization_set_table_to_bytes(
-                pointer, int(kind), ctypes.byref(result), ctypes.byref(length)
-            )
-            != 0
-        ):
-            _ffi.raise_last_error(lib)
-        try:
-            return bytes(ctypes.string_at(result, length.value))
-        finally:
-            lib.bethkit_bytes_free(
-                ctypes.cast(result, ctypes.POINTER(ctypes.c_uint8)),
-                length.value,
-            )
+        return _table_bytes.serialize_table(self.__check_open(), kind)
 
     def __enter__(self) -> LocalizationSet:
         """Returns this open set for context-managed cleanup.
@@ -301,7 +295,7 @@ class LocalizationSet:
 
     def get_str(self, kind: StringFileKind, id: int) -> Optional[str]:
         """
-        Retrieves a string from the specified sub-table decoded as UTF-8.
+        Retrieves a string decoded with the set's selected codec.
 
         Args:
             kind (StringFileKind): Which sub-table to query.
@@ -313,13 +307,14 @@ class LocalizationSet:
 
         Raises:
             BethkitClosedError: This set is closed.
-            UnicodeDecodeError: The stored bytes are not valid UTF-8.
+            LookupError: The selected codec name is not recognized.
+            UnicodeDecodeError: The stored bytes are invalid for the codec.
         """
 
         raw = self.get(kind, id)
         if raw is None:
             return None
-        return raw.rstrip(b"\x00").decode("utf-8")
+        return raw.rstrip(b"\x00").decode(self.__encoding)
 
     def set(self, kind: StringFileKind, id: int, data: bytes) -> None:
         """
