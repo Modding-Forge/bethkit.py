@@ -128,6 +128,43 @@ class TestSchema:
 
         mock_lib.bethkit_semantic_context_new.assert_not_called()
 
+    def test_semantic_context_selects_per_string_decoding(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Forwards the opt-in mixed-encoding policy to native code.
+
+        Args:
+            mock_lib: Patched native functions.
+        """
+
+        mock_lib.bethkit_schema_package_open.return_value = 202
+        constructor = mock_lib.bethkit_semantic_context_new_with_inline_encoding
+        constructor.return_value = 303
+
+        with SchemaPackage.open(Path("candidate.bkschema")) as package:
+            with SemanticContext(package, inline_decoding="prefer_utf8"):
+                pass
+
+        constructor.assert_called_once_with(202, 3)
+
+    def test_semantic_context_rejects_conflicting_codec_policies(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Rejects a forced codec combined with automatic selection.
+
+        Args:
+            mock_lib: Patched native functions.
+        """
+
+        mock_lib.bethkit_schema_package_open.return_value = 202
+        with SchemaPackage.open(Path("candidate.bkschema")) as package:
+            with pytest.raises(ValueError, match="cannot be combined"):
+                SemanticContext(
+                    package,
+                    inline_encoding="utf-8",
+                    inline_decoding="prefer_utf8",
+                )
+
     def test_semantic_context_requires_new_native_symbol(
         self, mock_lib: MagicMock
     ) -> None:

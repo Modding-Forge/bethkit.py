@@ -113,6 +113,8 @@ def _from_snapshot(
                     address=address,
                     text=value.value,
                     storage="inline",
+                    encoding=value.inline_encoding,
+                    encoding_source=value.encoding_source,
                 )
             elif value.kind == "uint" and isinstance(value.value, int):
                 if value.string_table is None:

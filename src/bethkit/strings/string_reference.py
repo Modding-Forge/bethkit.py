@@ -25,6 +25,10 @@ class StringReference(pydantic.BaseModel, frozen=True):
     """Current text, or None when external tables were not supplied."""
     storage: Literal["inline", "external"]
     """Whether the source contains text bytes or an external string ID."""
+    encoding: Optional[str] = None
+    """Codec selected for inline text, absent for external string tables."""
+    encoding_source: Optional[Literal["schema", "heuristic", "forced"]] = None
+    """How the inline codec was selected; never part of identity."""
     table_kind: Optional[StringFileKind] = None
     """External table selected by the authoritative schema."""
     string_id: Optional[int] = None

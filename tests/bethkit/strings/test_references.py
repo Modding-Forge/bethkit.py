@@ -92,6 +92,44 @@ class TestStringReferences:
         assert before.text != after.text
         assert before._source_token != after._source_token
 
+    def test_inline_codec_metadata_does_not_change_identity(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Exposes native codec provenance without identifying text by it.
+
+        Args:
+            mock_lib: Patched native functions.
+        """
+
+        # given
+        snapshot = _snapshot()
+        field = snapshot.fields[0]
+        annotated = snapshot.model_copy(
+            update={
+                "fields": (
+                    field.model_copy(
+                        update={
+                            "value": field.value.model_copy(
+                                update={
+                                    "inline_encoding": "utf8",
+                                    "encoding_source": "heuristic",
+                                }
+                            )
+                        }
+                    ),
+                )
+            }
+        )
+        with Plugin._from_native(0x100) as plugin:
+            # when
+            plain = next(references._from_snapshot(snapshot, plugin, None))
+            detected = next(references._from_snapshot(annotated, plugin, None))
+
+        # then
+        assert plain.identity == detected.identity
+        assert detected.encoding == "utf8"
+        assert detected.encoding_source == "heuristic"
+
     def test_external_reference_without_tables_is_unresolved(
         self, mock_lib: MagicMock
     ) -> None:
