@@ -78,6 +78,9 @@ class TestLocalizationEditor:
         tables.clone.return_value = working
         working.get_str.return_value = "Same text"
         working.insert_new.return_value = 41
+        set_value = mocker.patch(
+            "bethkit.strings.editor._codec_selection.set_value"
+        )
         with Plugin._from_native(0x100) as plugin:
             source_refs = list(
                 references._from_snapshot(
@@ -94,9 +97,9 @@ class TestLocalizationEditor:
         )
         working.set.assert_not_called()
         tables.set.assert_not_called()
-        native_editor._set_json.assert_called_once_with(
-            source_refs[0].address, {"kind": "uint", "value": 41}
-        )
+        assert set_value.call_args.args[0] is native_editor
+        assert set_value.call_args.args[1].address == source_refs[0].address
+        assert set_value.call_args.args[2:] == ("uint", 41)
         tables.close.assert_not_called()
         working.close.assert_called_once()
 
@@ -112,7 +115,10 @@ class TestLocalizationEditor:
         context = mocker.create_autospec(SemanticContext, instance=True)
         native_editor = mocker.create_autospec(RecordEditor, instance=True)
         native_editor.strings_snapshot.return_value = _snapshot(localized=True)
-        native_editor._set_json.side_effect = _error.UnsupportedEditError("bad")
+        mocker.patch(
+            "bethkit.strings.editor._codec_selection.set_value",
+            side_effect=_error.UnsupportedEditError("bad"),
+        )
         context.edit.return_value = native_editor
         tables = mocker.create_autospec(LocalizationSet, instance=True)
         working = mocker.create_autospec(LocalizationSet, instance=True)
@@ -248,6 +254,9 @@ class TestLocalizationEditor:
         context = mocker.create_autospec(SemanticContext, instance=True)
         native_editor = mocker.create_autospec(RecordEditor, instance=True)
         native_editor.strings_snapshot.return_value = _snapshot()
+        set_value = mocker.patch(
+            "bethkit.strings.editor._codec_selection.set_value"
+        )
         context.edit.return_value = native_editor
         with Plugin._from_native(0x100) as plugin:
             reference = next(
@@ -259,6 +268,6 @@ class TestLocalizationEditor:
                 editor.save_bundle(tmp_path / "bundle", "test.esp")
 
         # then
-        native_editor._set_json.assert_not_called()
+        set_value.assert_not_called()
         native_editor.finish.assert_not_called()
         native_patcher.replace_record.assert_not_called()

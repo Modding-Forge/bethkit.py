@@ -112,6 +112,75 @@ def set_json(
         raise UnsupportedEditError(_ffi.last_error(lib))
 
 
+def set_inline_string_at(
+    pointer: int,
+    address: _wire.FieldAddress,
+    path: str,
+    encoding_id: int,
+    text: str,
+) -> None:
+    """Atomically replaces one addressed inline string with a chosen codec.
+
+    Args:
+        pointer: Editor pointer checked by its Python owner.
+        address: Current structural position of the inline string.
+        path: Exact schema path of the string leaf.
+        encoding_id: Native code for a concrete supported encoding.
+        text: Replacement Unicode text.
+
+    Raises:
+        UnsupportedEditError: Native support is absent or the edit is invalid.
+    """
+
+    lib = _ffi.load_lib()
+    if not hasattr(lib, "bethkit_record_editor_set_inline_string_at_json"):
+        raise UnsupportedEditError(
+            "The native Bethkit library does not support per-field codecs."
+        )
+    result = lib.bethkit_record_editor_set_inline_string_at_json(
+        pointer,
+        _ffi.senc(address.model_dump_json()),
+        _ffi.senc(path),
+        encoding_id,
+        _ffi.senc(text),
+    )
+    if result != 0:
+        raise UnsupportedEditError(_ffi.last_error(lib))
+
+
+def select_inline_encoding_at(
+    pointer: int,
+    address: _wire.FieldAddress,
+    path: str,
+    encoding_id: int,
+) -> None:
+    """Changes the read codec for one editor-local inline field.
+
+    Args:
+        pointer: Editor pointer checked by its Python owner.
+        address: Current structural position of the inline string.
+        path: Exact schema path of the string leaf.
+        encoding_id: Native code for a concrete supported encoding.
+
+    Raises:
+        UnsupportedEditError: Native support is absent or the codec is invalid.
+    """
+
+    lib = _ffi.load_lib()
+    if not hasattr(lib, "bethkit_record_editor_select_inline_encoding_at_json"):
+        raise UnsupportedEditError(
+            "The native Bethkit library does not support per-field codecs."
+        )
+    result = lib.bethkit_record_editor_select_inline_encoding_at_json(
+        pointer,
+        _ffi.senc(address.model_dump_json()),
+        _ffi.senc(path),
+        encoding_id,
+    )
+    if result != 0:
+        raise UnsupportedEditError(_ffi.last_error(lib))
+
+
 def insert_at(
     pointer: int, address: _wire.FieldAddress, value: _wire.WireValue
 ) -> None:

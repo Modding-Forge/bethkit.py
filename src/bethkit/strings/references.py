@@ -111,6 +111,7 @@ def _from_snapshot(
                 reference = StringReference(
                     identity=identity,
                     address=address,
+                    schema_path=value.schema_path,
                     text=value.value,
                     storage="inline",
                     encoding=value.inline_encoding,
