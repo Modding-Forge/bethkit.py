@@ -3,5 +3,17 @@
   "repository": "Modding-Forge/bethkit",
   "revision": "03d9b106ab9b41081ed727ce7594410998a48173",
   "schema_sha256": "8066dd6c64fe61583bafe0f8e57c6d78bbaf4d84d41a427fe98d383e976ee092",
-  "release": null
+  "release": {
+    "tag": "v0.7.0",
+    "assets": {
+      "windows-x64": {
+        "filename": "bethkit-v0.7.0-windows-x64.zip",
+        "sha256": "65ec4d568e05cc5c779e39de49beafd6f9682e6ba44f78d60233db522ef2d34c"
+      },
+      "linux-x64": {
+        "filename": "bethkit-v0.7.0-linux-x64.zip",
+        "sha256": "d72bf12c5abd29329f9863049771eb3c8c16bbcdb55085e3dd4af92212685b18"
+      }
+    }
+  }
 }
