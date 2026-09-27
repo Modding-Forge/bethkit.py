@@ -114,6 +114,8 @@ with SchemaPackage.open(Path("skyrim_se.bkschema")) as package:
 
 For an inline-string plugin, omit `tables`. A string's identity contains its plugin and structural position, never its text or external table ID. Replacing one external string allocates a fresh ID so other users of a shared ID are unchanged. Saving creates a new directory containing the plugin, its `Strings/` files, and a checksum manifest; it never overwrites an installed Data directory.
 
+Bethkit normally uses each schema field's declared encoding for inline text. Some translations, including the German USSEP ESP, store UTF-8 text where the Skyrim SE schema declares Windows-1252. For these plugins, create `SemanticContext(package, inline_encoding="utf-8")` and use that same context for reading and editing. The override applies only to schema-localizable text stored inline; technical fields keep their schema codec, and external string tables have their own encoding option. It requires a native Bethkit build that supports inline encoding overrides.
+
 ### Building a plugin from scratch
 
 ```python

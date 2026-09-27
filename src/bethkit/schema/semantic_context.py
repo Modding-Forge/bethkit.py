@@ -4,11 +4,12 @@ Copyright (c) Modding Forge
 
 from __future__ import annotations
 
+import codecs
 import logging
-from typing import ClassVar
+from typing import ClassVar, Optional
 
 from .. import _ffi
-from .._error import BethkitClosedError, RecordDecodeError
+from .._error import BethkitClosedError, BethkitNativeError, RecordDecodeError
 from .._ownership import finalize
 from ..records import _wire
 from ._record_handle import RecordHandle
@@ -23,19 +24,45 @@ class SemanticContext:
     log: ClassVar[logging.Logger] = logging.getLogger("SemanticContext")
     __pointer: int = 0
 
-    def __init__(self, package: SchemaPackage) -> None:
+    def __init__(
+        self, package: SchemaPackage, *, inline_encoding: Optional[str] = None
+    ) -> None:
         """Creates a runtime that retains its own schema ownership.
 
         Args:
             package: Validated, open native schema package.
+            inline_encoding: Optional UTF-8 or Windows-1252 override for
+                schema-localizable text stored directly in the plugin.
+                Technical fields and external tables retain their own codecs.
 
         Raises:
             BethkitClosedError: The package is already closed.
             BethkitNativeError: The native runtime cannot be created.
+            LookupError: The encoding name is unknown.
+            ValueError: The encoding is not supported for inline fields.
         """
 
         lib = _ffi.load_lib()
-        pointer = lib.bethkit_semantic_context_new(package._native_pointer())
+        package_pointer = package._native_pointer()
+        if inline_encoding is None:
+            pointer = lib.bethkit_semantic_context_new(package_pointer)
+        else:
+            encoding_name = codecs.lookup(inline_encoding).name
+            encoding_id = {"utf-8": 1, "cp1252": 2}.get(encoding_name)
+            if encoding_id is None:
+                raise ValueError(
+                    f"Unsupported inline encoding: {inline_encoding!r}."
+                )
+            if not hasattr(
+                lib, "bethkit_semantic_context_new_with_inline_encoding"
+            ):
+                raise BethkitNativeError(
+                    "The native Bethkit library does not support inline "
+                    "encoding overrides. Update the native library."
+                )
+            pointer = lib.bethkit_semantic_context_new_with_inline_encoding(
+                package_pointer, encoding_id
+            )
         if not pointer:
             _ffi.raise_last_error(lib)
         self.__pointer = pointer
