@@ -25,12 +25,11 @@ from bethkit import (
 from bethkit.strings import LocalizationEditor, LocalizationSet, StringTable
 
 
-@pytest.fixture(scope="module")
-def native_context() -> Iterator[SemanticContext]:
-    """Loads an explicit schema or the sibling workspace's pinned test schema.
+def _schema_path() -> Path:
+    """Finds the configured Skyrim SE schema for native integration.
 
-    Yields:
-        A real native semantic context for this test module.
+    Returns:
+        The pinned schema package path.
 
     Raises:
         AssertionError: Native integration was requested without its schema.
@@ -45,7 +44,18 @@ def native_context() -> Iterator[SemanticContext]:
     )
     path = Path(os.environ.get("BETHKIT_SCHEMA", str(default)))
     assert path.is_file(), "Set BETHKIT_SCHEMA to the tested Skyrim SE schema."
-    with SchemaPackage.open(path) as package:
+    return path
+
+
+@pytest.fixture(scope="module")
+def native_context() -> Iterator[SemanticContext]:
+    """Loads an explicit schema or the sibling workspace's pinned test schema.
+
+    Yields:
+        A real native semantic context for this test module.
+    """
+
+    with SchemaPackage.open(_schema_path()) as package:
         with SemanticContext(package) as context:
             yield context
 
@@ -170,6 +180,51 @@ class TestNativeLocalization:
                 "Second display name",
             ]
             assert result[0].identity == before[0].identity
+
+    def test_utf8_inline_override_reads_and_writes_text(
+        self, tmp_path: Path
+    ) -> None:
+        """Decodes UTF-8 translation text and preserves its edit encoding.
+
+        Args:
+            tmp_path: Isolated destination for the edited plugin.
+        """
+
+        # given
+        header = build_record(
+            b"TES4", 0, 0, build_subrecord(b"HEDR", build_hedr(num_records=1))
+        )
+        record = build_record(
+            b"CLAS",
+            0x800,
+            0,
+            build_subrecord(b"EDID", b"TestClass\0")
+            + build_subrecord(b"FULL", "Grüße".encode() + b"\0"),
+        )
+        original = header + build_grup(b"CLAS", 0, record)
+        with (
+            SchemaPackage.open(_schema_path()) as package,
+            SemanticContext(package) as legacy,
+            SemanticContext(package, inline_encoding="utf-8") as utf8,
+            Plugin.from_bytes(
+                original, Game.SKYRIM_SE, name="test.esp"
+            ) as plugin,
+        ):
+            assert list(plugin.iter_strings(legacy))[0].text != "Grüße"
+            before = list(plugin.iter_strings(utf8))
+            assert [reference.text for reference in before] == ["Grüße"]
+
+            # when
+            with LocalizationEditor(plugin, utf8) as editor:
+                editor.replace(before[0], "Schöne Grüße")
+                output = editor.save_bundle(tmp_path / "utf8", "test.esp")
+
+            # then
+            with Plugin.open(output / "test.esp", Game.SKYRIM_SE) as reloaded:
+                texts = [
+                    reference.text for reference in reloaded.iter_strings(utf8)
+                ]
+                assert texts == ["Schöne Grüße"]
 
     def test_shared_external_id_is_copied_and_saved_with_plugin(
         self, native_context: SemanticContext, tmp_path: Path
