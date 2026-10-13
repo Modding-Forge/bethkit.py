@@ -143,11 +143,12 @@ class TestGeneratedModels:
         """Runtime validation also protects callers that evade static typing."""
 
         quest = QuestRecord.from_snapshot(_snapshot(_text(0, 0, 0, "Text")))
-        reference = cast(_base.FieldRef[object], quest.field("editor_id"))
+        reference = cast(
+            _base.FieldRef[object],
+            quest.stages[0].log_entries[0].field("log_entry"),
+        )
         with pytest.raises(pydantic.ValidationError):
-            pydantic.TypeAdapter[object](reference._annotation).validate_python(
-                42
-            )
+            _base.encode_replacement(reference, {"unexpected": "structure"})
 
     def test_game_package_loads_only_requested_record_module(self) -> None:
         """Importing the library or one game does not construct every model."""

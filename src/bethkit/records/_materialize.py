@@ -12,6 +12,7 @@ import pydantic
 from . import _values, _wire
 from ._field_ref import FieldRef
 from ._struct_model import StructModel
+from ._validation import validate_annotation
 from ._variant import Variant
 
 
@@ -242,4 +243,4 @@ def _payload(
         value = bytes(cast(tuple[int, ...], wire.value))
     elif wire.kind == "float" and isinstance(wire.value, str):
         value = float(wire.value)
-    return pydantic.TypeAdapter[object](annotation).validate_python(value)
+    return validate_annotation(annotation, value)
