@@ -174,6 +174,7 @@ def iter_strings(
         StringTableError: Supplied tables are incomplete or invalid.
     """
 
+    context._check_plugin(plugin)
     localized = plugin.is_localized
     for record in _iter_records(plugin):
         snapshot = context.strings_snapshot(record, localized=localized)

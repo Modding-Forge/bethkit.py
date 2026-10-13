@@ -20,6 +20,16 @@ def declare(lib: ctypes.CDLL) -> None:
     """
 
     lib.bethkit_schema_package_manifest_json.restype = ctypes.c_void_p
+    if hasattr(lib, "bethkit_semantic_context_new_for_plugin"):
+        lib.bethkit_semantic_context_new_for_plugin.restype = ctypes.c_void_p
+        lib.bethkit_semantic_context_new_for_plugin.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+        ]
+    if hasattr(lib, "bethkit_semantic_context_encoding_json"):
+        lib.bethkit_semantic_context_encoding_json.restype = ctypes.c_void_p
+        lib.bethkit_semantic_context_encoding_json.argtypes = [ctypes.c_void_p]
     lib.bethkit_schema_package_manifest_json.argtypes = [ctypes.c_void_p]
     lib.bethkit_schema_package_graph_json.restype = ctypes.c_void_p
     lib.bethkit_schema_package_graph_json.argtypes = [ctypes.c_void_p]

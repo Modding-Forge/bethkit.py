@@ -75,7 +75,7 @@ class LocalizationEditor:
         self.__plugin = plugin
         self.__context = context
         self.__localized = plugin.is_localized
-        context._native_pointer()
+        context._check_plugin(plugin)
         if self.__localized and tables is None:
             raise _error.StringTableError(
                 "Localized editing requires the original string tables."

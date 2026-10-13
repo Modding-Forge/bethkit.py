@@ -12,6 +12,7 @@ from .field_value import FieldValue
 from .flags_val import FlagsVal
 from .handler_requirement import HandlerRequirement
 from .named_field import NamedField
+from .plugin_encoding_decision import PluginEncodingDecision
 from .record_editor import RecordEditor
 from .record_view import RecordView
 from .reference_edge import ReferenceEdge
@@ -30,6 +31,7 @@ __all__ = [
     "FlagsVal",
     "HandlerRequirement",
     "NamedField",
+    "PluginEncodingDecision",
     "RecordEditor",
     "RecordView",
     "ReferenceEdge",

@@ -7,6 +7,7 @@ Copyright (c) Modding Forge
 from __future__ import annotations
 
 import ctypes
+import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
@@ -134,6 +135,9 @@ class TestNativeBuildHook:
         package_library = tmp_path / "src" / "bethkit" / library.name
         package_library.parent.mkdir(parents=True)
         package_library.write_bytes(b"existing library")
+        project = Path(__file__).resolve().parents[1]
+        shutil.copytree(project / "licenses", tmp_path / "licenses")
+        shutil.copy2(project / "THIRD_PARTY_NOTICES.md", tmp_path)
         mocker.patch.dict("os.environ", {"BETHKIT_LIB": str(library)})
         validate = mocker.patch.object(hatch_build, "_validate_library")
         mocker.patch.object(hatch_build, "_validate_file_lengths")
@@ -146,6 +150,10 @@ class TestNativeBuildHook:
         assert package_library.read_bytes() == b"existing library"
         assert library.read_bytes() == b"new library"
         assert build_data["pure_python"] is False
+        assert all(
+            str(path) in build_data["force_include"]
+            for path in hatch_build._encoding_license_files(tmp_path)
+        )
         assert build_data["force_include"][str(library)] == (
             f"bethkit/{library.name}"
         )
@@ -216,6 +224,18 @@ class TestNativeBuildHook:
         native.bethkit_schema_catalog_package.assert_called_once_with(0x1000, 1)
         native.bethkit_schema_package_free.assert_called_once_with(0x2000)
         native.bethkit_schema_catalog_free.assert_called_once_with(0x1000)
+
+    def test_missing_license_notice_blocks_packaging(
+        self, tmp_path: Path
+    ) -> None:
+        """Rejects wheel inputs that omit required redistribution notices.
+
+        Args:
+            tmp_path: Source directory without the required notices.
+        """
+
+        with pytest.raises(RuntimeError, match="license notice is missing"):
+            hatch_build._encoding_license_files(tmp_path)
 
     def test_editable_install_needs_no_native_library(
         self, tmp_path: Path, mocker: MockerFixture
