@@ -4,11 +4,11 @@
 
 Python bindings for [bethkit](https://github.com/Modding-Forge/bethkit), a Rust library for reading and writing Bethesda plugin and archive files. Python provides typed views and editing workflows; Bethkit remains responsible for binary formats, schema interpretation, and lossless writing.
 
-The published Python 2.2.0 release uses Bethkit 0.7.0. This development branch additionally requires the native encoding-detection revision pinned in [native-source.json](native-source.json), which does not yet have a published release. See [BUILDING.md](BUILDING.md) for source builds and release gates.
+Python 2.3.0 uses Bethkit 0.8.0, with the exact native revision and platform archive checksums pinned in [native-source.json](native-source.json). See [BUILDING.md](BUILDING.md) for source builds and release gates.
 
 ## Features
 
-For automatic plugin-specific inline decoding, create `SemanticContext.for_plugin(package, plugin, cpoverride=optional_path)`. An explicitly supplied `Path` to a `.cpoverride` file always wins; an unreadable or unsupported override fails without guessing. Without it, native Bethkit detects one codec from a bounded sample of schema-localizable strings and retains that choice for reading and localization editing. Inspect `context.encoding_decision` for the selected codec, decision source, and sample counts. The context must be reused only with its source plugin. This API requires the native implementation in [Bethkit issue #4](https://github.com/Modding-Forge/bethkit/issues/4), not the previously published 0.7.0 binary.
+For automatic plugin-specific inline decoding, create `SemanticContext.for_plugin(package, plugin, cpoverride=optional_path)`. An explicitly supplied `Path` to a `.cpoverride` file always wins; an unreadable or unsupported override fails without guessing. Without it, native Bethkit detects one codec from a bounded sample of schema-localizable strings and retains that choice for reading and localization editing. Inspect `context.encoding_decision` for the selected codec, decision source, and sample counts. The context must be reused only with its source plugin. This API requires Bethkit 0.8.0 or newer.
 
 Encoding detector and codec copyright/permission notices are bundled under `bethkit/licenses/` in platform wheels. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) identifies the audited components; Bethkit's own license remains Apache-2.0.
 
