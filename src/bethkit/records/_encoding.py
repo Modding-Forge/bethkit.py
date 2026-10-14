@@ -14,6 +14,7 @@ from .._error import UnsupportedEditError
 from . import _values, _wire
 from ._field_ref import FieldRef
 from ._struct_model import StructModel
+from ._validation import validate_annotation
 
 _T = TypeVar("_T")
 
@@ -39,9 +40,7 @@ def encode_replacement(
         raise UnsupportedEditError(
             "Edit individual fields within a grammar group."
         )
-    checked = pydantic.TypeAdapter[object](
-        reference._annotation
-    ).validate_python(value)
+    checked = validate_annotation(reference._annotation, value)
     return _encode(checked, reference._wire_value)
 
 

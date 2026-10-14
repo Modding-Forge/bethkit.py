@@ -188,6 +188,36 @@ def _validate_file_lengths(root: Path) -> None:
         raise RuntimeError(f"File-length policy blocks this build:\n{details}")
 
 
+def _encoding_license_files(root: Path) -> list[Path]:
+    """Requires the copyright and permission notices for linked codecs.
+
+    Args:
+        root: Python source project containing the audited notices.
+
+    Returns:
+        Required redistribution files to include in the platform wheel.
+
+    Raises:
+        RuntimeError: A required license or copyright notice is absent.
+    """
+
+    names = (
+        "chardetng-MIT.txt",
+        "encoding_rs-MIT.txt",
+        "encoding_rs-WHATWG-BSD.txt",
+        "memchr-MIT.txt",
+        "cfg-if-MIT.txt",
+    )
+    files = [root / "licenses" / "encoding" / name for name in names]
+    files.append(root / "THIRD_PARTY_NOTICES.md")
+    for path in files:
+        if not path.is_file():
+            raise RuntimeError(
+                f"Required encoding license notice is missing: {path}"
+            )
+    return files
+
+
 class CustomBuildHook(BuildHookInterface[BuilderConfig]):
     """Bundles validated native libraries into non-editable platform wheels."""
 
@@ -233,4 +263,8 @@ class CustomBuildHook(BuildHookInterface[BuilderConfig]):
             "bethkit/native-source.json"
         )
         build_data["pure_python"] = False
+        for notice in _encoding_license_files(root):
+            build_data["force_include"][str(notice)] = (
+                f"bethkit/licenses/{notice.name}"
+            )
         build_data["tag"] = _wheel_tag()

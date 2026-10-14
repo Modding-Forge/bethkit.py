@@ -6,13 +6,17 @@ from __future__ import annotations
 
 import codecs
 import logging
+import uuid
+from pathlib import Path
 from typing import ClassVar, Literal, Optional
 
 from .. import _ffi
 from .._error import BethkitClosedError, BethkitNativeError, RecordDecodeError
 from .._ownership import finalize
+from ..plugin import plugin as plugin_module
 from ..records import _wire
 from ._record_handle import RecordHandle
+from .plugin_encoding_decision import PluginEncodingDecision
 from .record_editor import RecordEditor
 from .record_view import RecordView
 from .schema_package import SchemaPackage
@@ -23,6 +27,7 @@ class SemanticContext:
 
     log: ClassVar[logging.Logger] = logging.getLogger("SemanticContext")
     __pointer: int = 0
+    __source_token: Optional[uuid.UUID] = None
 
     def __init__(
         self,
@@ -84,6 +89,93 @@ class SemanticContext:
         if not pointer:
             _ffi.raise_last_error(lib)
         self.__pointer = pointer
+
+    @classmethod
+    def for_plugin(
+        cls,
+        package: SchemaPackage,
+        plugin: plugin_module.Plugin,
+        *,
+        cpoverride: Optional[Path] = None,
+    ) -> SemanticContext:
+        """Resolves an inline codec once for one plugin's reads and edits.
+
+        Args:
+            package: Authoritative schema package for the source plugin.
+            plugin: Open source whose translatable raw text is sampled.
+            cpoverride: Explicit override file. Its first codec line always
+                wins; an unreadable or invalid file fails without guessing.
+
+        Returns:
+            An owned context with a retained encoding decision.
+
+        Raises:
+            BethkitClosedError: A supplied native handle is closed.
+            BethkitNativeError: Native support, schema, or override is invalid.
+        """
+
+        package_pointer = package._native_pointer()
+        plugin_pointer = plugin._native_pointer()
+        lib = _ffi.load_lib()
+        if not hasattr(lib, "bethkit_semantic_context_new_for_plugin"):
+            raise BethkitNativeError(
+                "Native Bethkit lacks plugin encoding detection."
+            )
+        pointer = lib.bethkit_semantic_context_new_for_plugin(
+            package_pointer,
+            plugin_pointer,
+            None if cpoverride is None else _ffi.senc(str(cpoverride)),
+        )
+        if not pointer:
+            _ffi.raise_last_error(lib)
+        result = cls.__new__(cls)
+        result.__pointer = pointer
+        result.__source_token = plugin._reference_identity()
+        return result
+
+    @property
+    def encoding_decision(self) -> Optional[PluginEncodingDecision]:
+        """Returns the retained decision without re-running detection.
+
+        Returns:
+            Native codec evidence, or None for a manually configured context.
+
+        Raises:
+            BethkitClosedError: This context is closed.
+            BethkitNativeError: Native metadata cannot be read.
+            pydantic.ValidationError: Native metadata is malformed.
+        """
+
+        pointer = self._native_pointer()
+        lib = _ffi.load_lib()
+        if not hasattr(lib, "bethkit_semantic_context_encoding_json"):
+            return None
+        result = lib.bethkit_semantic_context_encoding_json(pointer)
+        if not result:
+            _ffi.raise_last_error(lib)
+        text = _ffi.copy_and_free_str(result, lib.bethkit_string_free, lib)
+        if text == "null":
+            return None
+        return PluginEncodingDecision.model_validate_json(text)
+
+    def _check_plugin(self, plugin: plugin_module.Plugin) -> None:
+        """Rejects a different plugin when this context was auto-resolved.
+
+        Args:
+            plugin: Open plugin requesting strings or localization editing.
+
+        Raises:
+            BethkitClosedError: A required handle is closed.
+            ValueError: The decision belongs to another plugin instance.
+        """
+
+        self._native_pointer()
+        plugin._native_pointer()
+        if (
+            self.__source_token is not None
+            and self.__source_token != plugin._reference_identity()
+        ):
+            raise ValueError("Encoding context belongs to another plugin.")
 
     def _native_pointer(self) -> int:
         """Checks runtime lifetime before borrowing its private pointer.
