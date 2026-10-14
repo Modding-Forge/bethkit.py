@@ -113,3 +113,19 @@ class TestStringOwnership:
         with LocalizationSet._from_native(0x200) as localization:
             with pytest.raises(UnicodeDecodeError):
                 localization.get_str(StringFileKind.STRINGS, 17)
+
+    def test_localization_set_decodes_using_selected_language_codec(
+        self, mock_lib: MagicMock, mocker: MockerFixture
+    ) -> None:
+        """Uses the selected legacy codec for localized byte strings."""
+
+        # given
+        mock_lib.bethkit_localization_set_get.return_value = 0x300
+        mocker.patch("ctypes.string_at", return_value=b"\x80\0")
+
+        # when
+        with LocalizationSet._from_native(0x200, "cp1252") as localization:
+            result = localization.get_str(StringFileKind.STRINGS, 17)
+
+        # then
+        assert result == "€"

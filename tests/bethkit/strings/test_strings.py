@@ -173,6 +173,25 @@ class TestStringTable:
         # then
         assert result == "Iron Sword"
 
+    def test_get_str_accepts_encoding_override(
+        self, mocker: MockerFixture
+    ) -> None:
+        """Decodes legacy bytes when the caller selects their code page."""
+
+        # given
+        mock_lib: MagicMock = mocker.MagicMock()
+        mock_lib.bethkit_string_table_new.return_value = 0xAAAA
+        mock_lib.bethkit_string_table_get.return_value = 0xBEEF
+        mocker.patch("ctypes.string_at", return_value=b"\x80\x00")
+        mocker.patch("bethkit._ffi.load_lib", return_value=mock_lib)
+
+        # when
+        with StringTable.new(StringFileKind.STRINGS) as table:
+            result = table.get_str(1, encoding="cp1252")
+
+        # then
+        assert result == "€"
+
     def test_get_str_returns_none_for_missing_id(
         self, mocker: MockerFixture
     ) -> None:
