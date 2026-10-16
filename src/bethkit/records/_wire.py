@@ -70,6 +70,10 @@ class WireScalar(pydantic.BaseModel, frozen=True):
 
     schema_path: Optional[str] = None
     """Exact effective schema node selected by the native decoder."""
+    decoding_warning: Optional[str] = None
+    """Reason a schema string is retained as raw bytes, not guessed text."""
+    preview_encoding: Optional[str] = None
+    """Authoritative codec retained even when its bytes cannot be decoded."""
     kind: Literal[
         "int",
         "uint",

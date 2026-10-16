@@ -2,12 +2,15 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+exclude = ["/references/**"]
+
 [tool.hatch.build.hooks.custom]
 path = "scripts/hatch_build.py"
 
 [project]
 name = "bethkit"
-version = "2.3.0"
+version = "2.4.0"
 description = "Python bindings for bethkit — a Bethesda plugin and archive toolkit"
 readme = "README.md"
 license = { text = "Apache-2.0" }

@@ -124,6 +124,14 @@ def declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_record_subrecord_count.restype = ctypes.c_int64
     lib.bethkit_record_subrecord_count.argtypes = [ctypes.c_void_p]
 
+    if hasattr(lib, "bethkit_record_subrecord_signatures"):
+        lib.bethkit_record_subrecord_signatures.restype = ctypes.c_int64
+        lib.bethkit_record_subrecord_signatures.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint8),
+            ctypes.c_size_t,
+        ]
+
     lib.bethkit_record_subrecord_get.restype = ctypes.c_void_p
     lib.bethkit_record_subrecord_get.argtypes = [
         ctypes.c_void_p,

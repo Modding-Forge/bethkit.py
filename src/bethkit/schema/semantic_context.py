@@ -97,6 +97,8 @@ class SemanticContext:
         plugin: plugin_module.Plugin,
         *,
         cpoverride: Optional[Path] = None,
+        mixed: bool = False,
+        preserve_undecodable: bool = False,
     ) -> SemanticContext:
         """Resolves an inline codec once for one plugin's reads and edits.
 
@@ -105,6 +107,13 @@ class SemanticContext:
             plugin: Open source whose translatable raw text is sampled.
             cpoverride: Explicit override file. Its first codec line always
                 wins; an unreadable or invalid file fails without guessing.
+            mixed: Opt into per-string UTF-8 preference with a detected legacy
+                fallback (Windows-1252 when the prior is UTF-8). This is a
+                heuristic for ambiguous bytes, not proof of their encoding.
+                An explicit cpoverride remains authoritative even in this mode.
+            preserve_undecodable: Opt into mixed decoding with conservative raw
+                preservation of suspicious or weakly evidenced text. Raw inline
+                references have no text until an explicit codec is selected.
 
         Returns:
             An owned context with a retained encoding decision.
@@ -117,11 +126,18 @@ class SemanticContext:
         package_pointer = package._native_pointer()
         plugin_pointer = plugin._native_pointer()
         lib = _ffi.load_lib()
-        if not hasattr(lib, "bethkit_semantic_context_new_for_plugin"):
+        symbol = (
+            "bethkit_semantic_context_new_for_plugin_mixed"
+            if mixed
+            else "bethkit_semantic_context_new_for_plugin"
+        )
+        if preserve_undecodable:
+            symbol = "bethkit_semantic_context_new_for_plugin_preserving_text"
+        if not hasattr(lib, symbol):
             raise BethkitNativeError(
                 "Native Bethkit lacks plugin encoding detection."
             )
-        pointer = lib.bethkit_semantic_context_new_for_plugin(
+        pointer = getattr(lib, symbol)(
             package_pointer,
             plugin_pointer,
             None if cpoverride is None else _ffi.senc(str(cpoverride)),
@@ -139,6 +155,8 @@ class SemanticContext:
 
         Returns:
             Native codec evidence, or None for a manually configured context.
+            In mixed mode this is a plugin-level prior; field codec metadata
+            describes each string's actual interpretation.
 
         Raises:
             BethkitClosedError: This context is closed.

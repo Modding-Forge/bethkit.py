@@ -7,7 +7,7 @@ from __future__ import annotations
 import ctypes
 import logging
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Optional
 
@@ -17,7 +17,7 @@ from ..enums import Game
 
 if TYPE_CHECKING:
     from ..schema import SemanticContext
-    from ..strings import LocalizationSet, StringReference
+    from ..strings import LocalizationSet, StringReference, StringScanDiagnostic
 
 
 from ._metadata import PluginMetadata
@@ -202,12 +202,22 @@ class Plugin(PluginMetadata):
         self,
         context: SemanticContext,
         tables: Optional[LocalizationSet] = None,
+        *,
+        validate_nontext: bool = True,
+        preserve_opaque_nontext: bool = False,
+        on_diagnostic: Optional[Callable[[StringScanDiagnostic], None]] = None,
     ) -> Iterator[StringReference]:
         """Lazily enumerates schema-declared, positionally identified text.
 
         Args:
             context: Semantic runtime matching this plugin's game schema.
             tables: Optional tables for resolving externally stored text.
+            validate_nontext: Decode text-free records too. False skips only
+                schema-proven text-free types on batch-capable native libraries;
+                use full validation separately to check those payloads.
+            preserve_opaque_nontext: Preserve failed nontext records unchanged,
+                with explicit diagnostics, rather than aborting extraction.
+            on_diagnostic: Optional observer for each opaque record diagnostic.
 
         Returns:
             An iterator decoding only the current record's string fields.
@@ -215,12 +225,20 @@ class Plugin(PluginMetadata):
         Raises:
             BethkitClosedError: A native owner closes during iteration.
             RecordDecodeError: A source record cannot be decoded.
+            ValueError: Opaque preservation is combined with nontext skipping.
             StringTableError: A supplied table cannot resolve a string ID.
         """
 
         from ..strings import references
 
-        return references.iter_strings(self, context, tables)
+        return references.iter_strings(
+            self,
+            context,
+            tables,
+            validate_nontext=validate_nontext,
+            preserve_opaque_nontext=preserve_opaque_nontext,
+            on_diagnostic=on_diagnostic,
+        )
 
     def close(self) -> None:
         """Release the native plugin handle.

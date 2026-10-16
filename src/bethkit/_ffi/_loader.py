@@ -18,6 +18,7 @@ from . import (
     _declare_load_order,
     _declare_plugin,
     _declare_schema,
+    _declare_string_cursor,
     _declare_strings,
 )
 
@@ -239,4 +240,5 @@ def _declare(lib: ctypes.CDLL) -> None:
     _declare_archive.declare(lib)
     _declare_strings.declare(lib)
     _declare_schema.declare(lib)
+    _declare_string_cursor.declare(lib)
     _declare_load_order.declare(lib)

@@ -193,6 +193,8 @@ class LocalizationEditor:
             raise ValueError(
                 "String replacements cannot contain NUL characters."
             )
+        if reference.raw_bytes is not None and inline_encoding is None:
+            raise _error.UnsupportedEditError("Select an inline codec first.")
         editor = self.__editor_for(reference)
         snapshot = editor.strings_snapshot()
         current = next(

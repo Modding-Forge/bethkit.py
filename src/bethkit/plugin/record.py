@@ -156,6 +156,41 @@ class Record(_ownership.BorrowedHandle):
             _ffi.raise_last_error(lib)
         return n
 
+    def subrecord_signatures(self) -> tuple[bytes, ...]:
+        """Copies all subrecord signatures in their original source order.
+
+        Uses one bounded native buffer where supported, without creating
+        borrowed wrappers or copying payloads. Older libraries use the same
+        ordered inspection path as iteration. Results own their Python data.
+
+        Returns:
+            Four-byte signatures, including repeated and unknown fields.
+
+        Raises:
+            BethkitClosedError: The record's native owner is closed.
+            BethkitNativeError: Parsing or native buffer copying failed.
+        """
+
+        self._native_pointer()
+        lib = _ffi.load_lib()
+        if not hasattr(lib, "bethkit_record_subrecord_signatures"):
+            return tuple(subrecord.signature for subrecord in self)
+        count = self.subrecord_count()
+        if not count:
+            return ()
+        buffer = (ctypes.c_uint8 * (count * 4))()
+        copied = lib.bethkit_record_subrecord_signatures(
+            self._native_pointer(), buffer, len(buffer)
+        )
+        if copied < 0:
+            _ffi.raise_last_error(lib)
+        if copied != count:
+            raise BethkitNativeError("Native subrecord count changed.")
+        data = bytes(buffer)
+        return tuple(
+            data[index : index + 4] for index in range(0, len(data), 4)
+        )
+
     def subrecord_at(self, index: int) -> SubRecord:
         """Return the sub-record at the given index.
 

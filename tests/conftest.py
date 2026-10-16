@@ -272,5 +272,9 @@ def mock_lib(mocker: MockerFixture) -> MagicMock:
     """
 
     lib = MagicMock()
+    # Default mocks represent the legacy ABI; cursor tests opt in explicitly.
+    del lib.bethkit_string_cursor_new
+    del lib.bethkit_string_cursor_next_json
+    del lib.bethkit_string_cursor_free
     mocker.patch("bethkit._ffi.load_lib", return_value=lib)
     return lib

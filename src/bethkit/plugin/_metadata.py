@@ -14,6 +14,8 @@ from ..enums import PluginKind
 class PluginMetadata(ABC):
     """Provides header metadata for an open plugin owner."""
 
+    __cached_masters: Optional[tuple[str, ...]] = None
+
     @abstractmethod
     def _native_pointer(self) -> int:
         """Returns the owning plugin's live pointer.
@@ -85,9 +87,10 @@ class PluginMetadata(ABC):
             BethkitClosedError: If the plugin has been closed.
         """
 
-        return _ffi.load_lib().bethkit_plugin_master_count(
-            self._native_pointer()
-        )
+        pointer = self._native_pointer()
+        if self.__cached_masters is not None:
+            return len(self.__cached_masters)
+        return _ffi.load_lib().bethkit_plugin_master_count(pointer)
 
     def master_at(self, index: int) -> str:
         """Return the master plugin name at the given index.
@@ -103,10 +106,13 @@ class PluginMetadata(ABC):
             BethkitNativeError: If *index* is out of range.
         """
 
+        pointer = self._native_pointer()
+        if self.__cached_masters is not None and 0 <= index < len(
+            self.__cached_masters
+        ):
+            return self.__cached_masters[index]
         lib = _ffi.load_lib()
-        raw: Optional[bytes] = lib.bethkit_plugin_master_get(
-            self._native_pointer(), index
-        )
+        raw: Optional[bytes] = lib.bethkit_plugin_master_get(pointer, index)
         if raw is None:
             _ffi.raise_last_error(lib)
         return cast(bytes, raw).decode("utf-8")
@@ -122,4 +128,11 @@ class PluginMetadata(ABC):
             BethkitClosedError: If the plugin has been closed.
         """
 
-        return [self.master_at(i) for i in range(self.master_count)]
+        self._native_pointer()
+        # Plugin headers are immutable. Publish only a fully decoded tuple;
+        # return a fresh list so callers cannot mutate the owner's cache.
+        if self.__cached_masters is None:
+            self.__cached_masters = tuple(
+                self.master_at(i) for i in range(self.master_count)
+            )
+        return list(self.__cached_masters)

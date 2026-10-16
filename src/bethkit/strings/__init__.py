@@ -13,12 +13,14 @@ from ..strings.references import (
     iter_strings,
 )
 from ..strings.strings import LocalizationSet, StringTable
+from .string_scan_diagnostic import StringScanDiagnostic
 
 __all__ = [
     "LocalizationSet",
     "LocalizationEditor",
     "StringIdentity",
     "StringReference",
+    "StringScanDiagnostic",
     "StringTable",
     "iter_strings",
 ]

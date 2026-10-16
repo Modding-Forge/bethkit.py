@@ -13,7 +13,7 @@ class PluginEncodingDecision(pydantic.BaseModel, frozen=True):
     """Retained native codec decision and the evidence used to select it."""
 
     encoding: str
-    """Concrete codec used for inline translatable reading and writing."""
+    """Plugin codec prior; individual strings may differ in mixed mode."""
     source: Literal["cpoverride", "detector", "ascii", "no_inline_text"]
     """Evidence used to select the codec; ASCII cannot identify its origin."""
     sample_bytes: int = pydantic.Field(ge=0, le=65536)

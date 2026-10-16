@@ -4,11 +4,17 @@
 
 Python bindings for [bethkit](https://github.com/Modding-Forge/bethkit), a Rust library for reading and writing Bethesda plugin and archive files. Python provides typed views and editing workflows; Bethkit remains responsible for binary formats, schema interpretation, and lossless writing.
 
-Python 2.3.0 uses Bethkit 0.8.0, with the exact native revision and platform archive checksums pinned in [native-source.json](native-source.json). See [BUILDING.md](BUILDING.md) for source builds and release gates.
+Python 2.4.0 uses Bethkit 0.9.0. Source-build inputs and exact release checksums are controlled by [native-source.json](native-source.json). See [BUILDING.md](BUILDING.md) for source builds and release gates.
+
+See [PERFORMANCE.md](PERFORMANCE.md) for measured real-corpus results, streaming batches, the explicit mixed heuristic, extraction-only traversal, and correctness boundaries. Updating an installed package alone does not opt an application's existing schema context into automatic detection.
 
 ## Features
 
 For automatic plugin-specific inline decoding, create `SemanticContext.for_plugin(package, plugin, cpoverride=optional_path)`. An explicitly supplied `Path` to a `.cpoverride` file always wins; an unreadable or unsupported override fails without guessing. Without it, native Bethkit detects one codec from a bounded sample of schema-localizable strings and retains that choice for reading and localization editing. Inspect `context.encoding_decision` for the selected codec, decision source, and sample counts. The context must be reused only with its source plugin. This API requires Bethkit 0.8.0 or newer.
+
+The preservation option `SemanticContext.for_plugin(package, plugin, preserve_undecodable=True)` keeps suspicious or weakly evidenced inline text as raw bytes instead of inventing decoded text. Such a `StringReference` has `text=None`, `raw_bytes`, and a `decoding_warning`, with a separately labeled `best_effort_text` preview. Ambiguous previews prefer Windows-1252 and log that unconfirmed choice; undefined bytes are shown as hex escapes. Explicit override codecs remain authoritative for previews too. Preserve these fields when caching, do not automatically translate previews, and select an explicit field codec before editing unresolved text. The conservative warning classifier can flag valid legacy strings; it is not proof of corruption. Typed record models still require resolved text.
+
+Separately, `plugin.iter_strings(context, preserve_opaque_nontext=True, on_diagnostic=observer)` attempts full record validation but retains failed schema-proven nontext records as untouched opaque source, emitting typed diagnostics and warnings. Text-bearing failures and unknown schemas remain strict. The default remains strict, and this option cannot be combined with `validate_nontext=False`. An unchanged `PluginPatcher` output and unrelated record edits retain opaque source bytes; the option does not repair or permit semantic edits to an undecodable record. Both preservation options require Bethkit 0.9.0 or newer.
 
 Encoding detector and codec copyright/permission notices are bundled under `bethkit/licenses/` in platform wheels. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) identifies the audited components; Bethkit's own license remains Apache-2.0.
 
