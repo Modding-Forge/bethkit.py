@@ -81,26 +81,29 @@ def publish(
     plugin_bytes: bytes,
     table_bytes: Mapping[StringFileKind, bytes],
     schema_hash: Optional[str],
+    *,
+    exist_ok: bool = False,
 ) -> Path:
-    """Stages already serialized outputs and publishes their directory once.
+    """Stages serialized outputs before publishing a directory or merging files.
 
     Args:
-        destination: Absolute path of a new directory with an existing parent.
+        destination: Absolute output directory with an existing parent.
         plugin_name: Validated plain plugin filename.
         language: Validated Bethesda string-table filename suffix.
         plugin_bytes: Complete encoded plugin.
         table_bytes: Complete encoded tables indexed by format.
         schema_hash: Schema identity used by the editor, if any record changed.
+        exist_ok: Merge staged files into an existing ordinary directory.
 
     Returns:
         The published directory path.
 
     Raises:
-        FileExistsError: The destination already exists.
+        FileExistsError: The destination exists and exist_ok is False.
         OSError: Staging, writing, or publication failed.
     """
 
-    if destination.exists():
+    if destination.exists() and not exist_ok:
         raise FileExistsError(destination)
     payloads = {plugin_name: plugin_bytes}
     stem = Path(plugin_name).stem
@@ -134,7 +137,42 @@ def publish(
                 output.write(data)
                 output.flush()
                 os.fsync(output.fileno())
-        if destination.exists():
-            raise FileExistsError(destination)
-        staging.rename(destination)
+        if destination.exists() or destination.is_symlink():
+            if not exist_ok:
+                raise FileExistsError(destination)
+            _merge(staging, destination, payloads)
+        else:
+            staging.rename(destination)
     return destination
+
+
+def _merge(
+    staging: Path, destination: Path, payloads: Mapping[str, bytes]
+) -> None:
+    """Publishes staged files without deleting unrelated directory contents.
+
+    Args:
+        staging: Directory containing every fully written output file.
+        destination: Existing output directory, never a symbolic link.
+        payloads: Validated bundle-relative output names.
+
+    Raises:
+        OSError: A path is unsafe or a file replacement fails. Earlier file
+            replacements may remain; this is not a multi-file transaction.
+    """
+
+    if destination.is_symlink() or not destination.is_dir():
+        raise NotADirectoryError(destination)
+    for name in payloads:
+        target = destination / name
+        if target.parent != destination:
+            if target.parent.is_symlink() or (
+                target.parent.exists() and not target.parent.is_dir()
+            ):
+                raise NotADirectoryError(target.parent)
+        if target.is_symlink() or (target.exists() and not target.is_file()):
+            raise FileExistsError(target)
+    for name in payloads:
+        target = destination / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(staging / name, target)

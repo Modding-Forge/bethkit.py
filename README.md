@@ -4,7 +4,9 @@
 
 Python bindings for [bethkit](https://github.com/Modding-Forge/bethkit), a Rust library for reading and writing Bethesda plugin and archive files. Python provides typed views and editing workflows; Bethkit remains responsible for binary formats, schema interpretation, and lossless writing.
 
-Python 2.4.0 uses Bethkit 0.9.0. Source-build inputs and exact release checksums are controlled by [native-source.json](native-source.json). See [BUILDING.md](BUILDING.md) for source builds and release gates.
+Python 2.4.1 uses Bethkit 0.9.0. Source-build inputs and exact release checksums are controlled by [native-source.json](native-source.json). See [BUILDING.md](BUILDING.md) for source builds and release gates.
+
+`LocalizationEditor.save_bundle(output_dir, plugin_name, exist_ok=True)` allows an existing output directory. It replaces generated plugin, table and manifest files while preserving unrelated files. The default rejects existing directories. New bundles are published by one directory rename; merging into an existing directory is atomic per file, not transactional across the whole bundle. A failed merge can leave some files updated; retry the save to complete it. The manifest describes the current save, not other files already in the directory.
 
 See [PERFORMANCE.md](PERFORMANCE.md) for measured real-corpus results, streaming batches, the explicit mixed heuristic, extraction-only traversal, and correctness boundaries. Updating an installed package alone does not opt an application's existing schema context into automatic detection.
 

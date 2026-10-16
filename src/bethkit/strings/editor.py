@@ -2,8 +2,6 @@
 Copyright (c) Modding Forge
 """
 
-# Coordinated, copy-on-write plugin and localization editing.
-
 from __future__ import annotations
 
 import logging
@@ -27,7 +25,7 @@ class LocalizationEditor:
     The source plugin and semantic context remain caller-owned and must stay
     open until serialization. Supplied string tables are cloned immediately.
     External edits allocate fresh IDs, so other fields sharing the old ID
-    remain unchanged. No original plugin or table is overwritten.
+    remain unchanged. Read-only sources may be saved over explicit outputs.
     """
 
     log: ClassVar[logging.Logger] = logging.getLogger("LocalizationEditor")
@@ -314,27 +312,27 @@ class LocalizationEditor:
         plugin_name: str,
         *,
         language: str = "english",
+        exist_ok: bool = False,
     ) -> Path:
-        """Publishes a new directory containing the plugin and all its tables.
+        """Publishes a directory containing the plugin and all its tables.
 
-        All files are staged in a sibling directory and exposed together by
-        one directory rename. Existing output directories are rejected. This
-        does not overwrite installed game files or claim transactional updates
-        of multiple files in an existing Data directory. Saving finalizes the
-        session; a failed disk write can be retried with the cached outputs.
+        Files are staged before publication. New directories use one rename;
+        exist_ok uses per-file replacement, not a bundle-wide transaction.
+        Saving finalizes the session; failed writes can retry cached outputs.
 
         Args:
-            output_dir: New output directory whose parent already exists.
+            output_dir: Output directory whose parent already exists.
             plugin_name: Plain plugin filename within that directory.
             language: Language suffix for the external string tables.
+            exist_ok: Allow existing directories, replacing bundle files only.
 
         Returns:
-            Absolute path of the newly published bundle directory.
+            Absolute path of the published bundle directory.
 
         Raises:
             BethkitClosedError: The session is closed.
             BethkitNativeError: Plugin or table serialization failed.
-            FileExistsError: The output directory already exists.
+            FileExistsError: The output exists and exist_ok is False.
             OSError: Staging, writing, or final publication failed.
             ValueError: A filename or language component is invalid.
         """
@@ -342,7 +340,7 @@ class LocalizationEditor:
         self.__check_open()
         _bundle.validate_filename(plugin_name, language)
         destination = output_dir.absolute()
-        if destination.exists():
+        if destination.exists() and not exist_ok:
             raise FileExistsError(destination)
         plugin_bytes = self.__finalize()
         return _bundle.publish(
@@ -352,6 +350,7 @@ class LocalizationEditor:
             plugin_bytes,
             self.__table_bytes,
             self.__schema_hash,
+            exist_ok=exist_ok,
         )
 
     def close(self) -> None:
