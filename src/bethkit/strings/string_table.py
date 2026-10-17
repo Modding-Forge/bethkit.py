@@ -7,12 +7,12 @@ from __future__ import annotations
 import ctypes
 import logging
 from pathlib import Path
-from typing import ClassVar, Optional
+from typing import BinaryIO, ClassVar, Optional
 
 from .. import _ffi, _ownership
-from .._error import BethkitClosedError
+from .._error import BethkitClosedError, BethkitNativeError
 from ..enums import StringFileKind
-from . import _buffer
+from . import _buffer, _table_input
 
 
 class StringTable:
@@ -21,9 +21,9 @@ class StringTable:
 
     Supported files are ``.STRINGS``, ``.DLSTRINGS``, and ``.ILSTRINGS``.
 
-    String tables map numeric IDs to UTF-8 string payloads.  They can be
-    loaded from disk with :meth:`open`, or created fresh with :meth:`new`
-    and written back with :meth:`write_to_file`.
+    Tables map IDs to raw payloads. Load files with :meth:`open`, serialized
+    bytes with :meth:`from_bytes`, or binary streams with :meth:`from_stream`.
+    Create empty tables with :meth:`new`; save with :meth:`write_to_file`.
 
     Use as a context manager to guarantee that the native handle is
     freed::
@@ -36,13 +36,13 @@ class StringTable:
     __ptr: int = 0
 
     def __init__(self) -> None:
-        """Rejects direct construction; use open() or new() instead.
+        """Rejects direct construction; use a public factory instead.
 
         Raises:
             TypeError: This class requires a public factory method.
         """
 
-        raise TypeError("Use StringTable.open() or StringTable.new().")
+        raise TypeError("Use a StringTable factory method.")
 
     @classmethod
     def _from_native(cls, pointer: int) -> StringTable:
@@ -126,6 +126,59 @@ class StringTable:
         return _ownership.adopt_native(
             ptr, cls._from_native, lib.bethkit_string_table_free
         )
+
+    @classmethod
+    def from_bytes(cls, data: bytes, kind: StringFileKind) -> StringTable:
+        """Parses a serialized table, retaining no reference to its input.
+
+        Args:
+            data: Complete serialized table, including header and directory.
+            kind: STRINGS, DL_STRINGS, or IL_STRINGS; no format guessing.
+
+        Returns:
+            Independently owned table containing the parsed raw payloads.
+
+        Raises:
+            BethkitNativeError: Input is malformed or native support is missing.
+            TypeError: Data is not bytes.
+            ValueError: The format is not a valid StringFileKind.
+        """
+
+        data = _table_input.require_bytes(data)
+        kind_value = int(StringFileKind(kind))
+        lib = _ffi.load_lib()
+        if not hasattr(lib, "bethkit_string_table_from_bytes"):
+            raise BethkitNativeError(
+                "Native Bethkit lacks in-memory string tables; update it."
+            )
+        pointer = lib.bethkit_string_table_from_bytes(
+            _buffer.from_bytes(data), len(data), kind_value
+        )
+        if not pointer:
+            _ffi.raise_last_error(lib)
+        return _ownership.adopt_native(
+            pointer, cls._from_native, lib.bethkit_string_table_free
+        )
+
+    @classmethod
+    def from_stream(cls, stream: BinaryIO, kind: StringFileKind) -> StringTable:
+        """Reads from the current position to EOF without seeking or closing.
+
+        Args:
+            stream: Blocking binary stream positioned at the table header.
+            kind: Explicit serialized string-table format.
+
+        Returns:
+            Independent table; the caller may close the stream afterwards.
+
+        Raises:
+            BethkitNativeError: Parsing fails or native support is missing.
+            TypeError: The stream does not return bytes.
+            OSError: Reading the stream fails.
+            ValueError: The stream is closed or its format is invalid.
+        """
+
+        return cls.from_bytes(_table_input.read_stream(stream), kind)
 
     def close(self) -> None:
         """

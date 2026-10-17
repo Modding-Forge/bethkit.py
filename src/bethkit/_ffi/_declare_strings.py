@@ -23,6 +23,14 @@ def declare(lib: ctypes.CDLL) -> None:
     lib.bethkit_string_table_open.restype = ctypes.c_void_p
     lib.bethkit_string_table_open.argtypes = [ctypes.c_char_p]
 
+    if hasattr(lib, "bethkit_string_table_from_bytes"):
+        lib.bethkit_string_table_from_bytes.restype = ctypes.c_void_p
+        lib.bethkit_string_table_from_bytes.argtypes = [
+            ctypes.POINTER(ctypes.c_uint8),
+            ctypes.c_size_t,
+            ctypes.c_int32,
+        ]
+
     lib.bethkit_string_table_free.restype = None
     lib.bethkit_string_table_free.argtypes = [ctypes.c_void_p]
 

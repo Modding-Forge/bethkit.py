@@ -4,7 +4,7 @@
 
 Python bindings for [bethkit](https://github.com/Modding-Forge/bethkit), a Rust library for reading and writing Bethesda plugin and archive files. Python provides typed views and editing workflows; Bethkit remains responsible for binary formats, schema interpretation, and lossless writing.
 
-Python 2.4.1 uses Bethkit 0.9.0. Source-build inputs and exact release checksums are controlled by [native-source.json](native-source.json). See [BUILDING.md](BUILDING.md) for source builds and release gates.
+Published Python 2.4.1 uses Bethkit 0.9.0. This development branch pins a newer native source commit for in-memory string-table parsing; that API is not in the published wheels yet. Source-build inputs and release checksums are controlled by [native-source.json](native-source.json). See [BUILDING.md](BUILDING.md) for source builds and release gates.
 
 `LocalizationEditor.save_bundle(output_dir, plugin_name, exist_ok=True)` allows an existing output directory. It replaces generated plugin, table and manifest files while preserving unrelated files. The default rejects existing directories. New bundles are published by one directory rename; merging into an existing directory is atomic per file, not transactional across the whole bundle. A failed merge can leave some files updated; retry the save to complete it. The manifest describes the current save, not other files already in the directory.
 
@@ -99,6 +99,26 @@ with SchemaPackage.open(Path("skyrim_se.bkschema")) as package:
 ```
 
 The generated view is read-only and remains usable after its source handles close. Edits use the native editor, including schema validation and callbacks. Structural changes require fresh addresses from `editor.snapshot()`; ordinary scalar or text-length changes retain their positions. The generic `RecordView` and `SemanticContext.snapshot()` remain available for inspectors and unknown fields.
+
+### Reading string tables from archive data
+
+`StringTable.from_bytes(data, kind)` parses the complete serialized file directly in memory. `StringTable.from_stream(stream, kind)` reads a blocking binary stream from its current position to EOF without seeking or closing it. Both methods support STRINGS, DLSTRINGS and ILSTRINGS; specify the format explicitly because these files have no reliable format signature. Entries retain raw bytes; `get_str()` explicitly decodes UTF-8. No temporary files are created, and the parsed table owns its data independently of the input.
+
+```python
+from io import BytesIO
+
+from bethkit import StringFileKind, StringTable
+
+# data is the complete decompressed file returned by the BSA reader.
+with StringTable.from_bytes(data, StringFileKind.STRINGS) as table:
+    text = table.get_str(17)
+
+with BytesIO(data) as stream:
+    with StringTable.from_stream(stream, StringFileKind.STRINGS) as table:
+        raw = table.get(17)
+```
+
+These factories require a native build exporting `bethkit_string_table_from_bytes`; the published native 0.9.0 does not provide that symbol. Existing APIs remain available with older libraries; the new factories raise a clear error instead of creating a temporary-file fallback.
 
 ### Editing localized text safely
 
