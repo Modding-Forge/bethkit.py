@@ -4,7 +4,7 @@
 
 Python bindings for [bethkit](https://github.com/Modding-Forge/bethkit), a Rust library for reading and writing Bethesda plugin and archive files. Python provides typed views and editing workflows; Bethkit remains responsible for binary formats, schema interpretation, and lossless writing.
 
-Published Python 2.4.1 uses Bethkit 0.9.0. This development branch pins a newer native source commit for in-memory string-table parsing; that API is not in the published wheels yet. Source-build inputs and release checksums are controlled by [native-source.json](native-source.json). See [BUILDING.md](BUILDING.md) for source builds and release gates.
+Python 2.5.0 uses Bethkit 0.10.0, including in-memory string-table parsing. Source-build inputs and exact release checksums are controlled by [native-source.json](native-source.json). See [BUILDING.md](BUILDING.md) for source builds and release gates.
 
 `LocalizationEditor.save_bundle(output_dir, plugin_name, exist_ok=True)` allows an existing output directory. It replaces generated plugin, table and manifest files while preserving unrelated files. The default rejects existing directories. New bundles are published by one directory rename; merging into an existing directory is atomic per file, not transactional across the whole bundle. A failed merge can leave some files updated; retry the save to complete it. The manifest describes the current save, not other files already in the directory.
 
@@ -118,7 +118,7 @@ with BytesIO(data) as stream:
         raw = table.get(17)
 ```
 
-These factories require a native build exporting `bethkit_string_table_from_bytes`; the published native 0.9.0 does not provide that symbol. Existing APIs remain available with older libraries; the new factories raise a clear error instead of creating a temporary-file fallback.
+These factories require Bethkit 0.10.0 or newer, exporting `bethkit_string_table_from_bytes`. Existing APIs remain available with older libraries; the new factories raise a clear error instead of creating a temporary-file fallback.
 
 ### Editing localized text safely
 

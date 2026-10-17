@@ -38,7 +38,7 @@ The GitHub `master` branch requires the `File length policy` check from GitHub A
 
 Regular CI builds exactly the pinned native commit from source on Windows and Linux, obtains the checksum-pinned schema, runs native integration, verifies generated Python models, and builds platform wheels. A commit that exists only locally must be pushed to the native repository before remote CI can check it out; updating the pin does not upload or publish anything.
 
-Published Python 2.4.1 pins Bethkit v0.9.0. The development in-memory string-table API requires native commit `b6aab61d4fd4ffa309466089cf88dcc7dc1b0eee`; its `native-source.json` release entry remains null until matching native artifacts are actually published. Publication requires the exact native source revision and verified platform release-archive checksums. There is no fallback to the latest native release and no invented future tag.
+Python 2.5.0 pins Bethkit v0.10.0, including the in-memory string-table API. Publication requires the exact native source revision and verified platform release-archive checksums in `native-source.json`. There is no fallback to the latest native release and no invented future tag.
 
 Before publishing Python, publish and verify the intended native revision. Then replace the null release entry with its actual tag and both platform asset entries, each containing the exact `filename` and full ZIP `sha256`. Keep `revision` aligned with the source used for those artifacts. The release workflow downloads only these immutable selections, verifies ZIP and schema checksums, and requires real native integration before building wheels. Linux wheels are repaired and inspected with auditwheel; their tags are not inferred from a string scan.
 
