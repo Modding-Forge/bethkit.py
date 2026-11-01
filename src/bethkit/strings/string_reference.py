@@ -45,6 +45,11 @@ class StringReference(pydantic.BaseModel, frozen=True):
     """External table selected by the authoritative schema."""
     string_id: Optional[int] = None
     """External table identifier; never part of the string's identity."""
+    record_context: Optional[_wire.RecordContext] = None
+    """Subrecord signature and editor ID, avoiding per-string record lookups.
+
+    None for older native libraries or undecodable editor IDs.
+    """
     __source_token: Optional[uuid.UUID] = pydantic.PrivateAttr(default=None)
 
     @pydantic.field_serializer("raw_bytes", when_used="json")

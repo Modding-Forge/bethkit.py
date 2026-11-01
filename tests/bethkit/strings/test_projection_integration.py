@@ -105,6 +105,11 @@ class TestEmptyStringProjection:
 
             # then
             assert len(actual) == int(include_text)
-            assert [value.model_dump() for value in actual] == [
-                value.model_dump() for value in expected
+            # Only batches carry record context; snapshots leave it unset.
+            assert [
+                value.model_dump(exclude={"record_context"}) for value in actual
+            ] == [
+                value.model_dump(exclude={"record_context"})
+                for value in expected
             ]
+            assert all(value.record_context is not None for value in actual)

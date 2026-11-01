@@ -170,8 +170,53 @@ class TestNativeStringBatch:
                 )
             actual = list(plugin.iter_strings(context))
             assert len(actual) == 600
-            assert [v.model_dump() for v in actual] == [
-                v.model_dump() for v in expected
+            # Only batches carry record context; snapshots leave it unset.
+            assert [
+                v.model_dump(exclude={"record_context"}) for v in actual
+            ] == [v.model_dump(exclude={"record_context"}) for v in expected]
+
+    def test_record_context_matches_record_lookups(self) -> None:
+        """Carries each string's subrecord signature and record editor ID."""
+
+        # given
+        header = build_record(
+            b"TES4", 0, 0, build_subrecord(b"HEDR", build_hedr(num_records=2))
+        )
+        records = build_record(
+            b"CLAS",
+            0x800,
+            0,
+            build_subrecord(b"EDID", b"WarriorClass\0")
+            + build_subrecord(b"FULL", b"Warrior\0"),
+        ) + build_record(b"CLAS", 0x801, 0, build_subrecord(b"FULL", b"Mage\0"))
+        data = header + build_grup(b"CLAS", 0, records)
+
+        with (
+            SchemaPackage.open(_schema_path()) as package,
+            Plugin.from_bytes(data, Game.SKYRIM_SE) as plugin,
+            SemanticContext.for_plugin(package, plugin) as context,
+        ):
+            # when
+            actual = list(plugin.iter_strings(context))
+
+            # then
+            assert len(actual) == 2
+            for reference in actual:
+                record = plugin.find_record(reference.identity.form_id)
+                assert record is not None
+                assert reference.record_context is not None
+                assert (
+                    bytes(reference.record_context.subrecord_signature)
+                    == record.subrecord_signatures()[
+                        reference.identity.subrecord_index
+                    ]
+                )
+                assert reference.record_context.editor_id == record.editor_id
+            assert [
+                r.record_context.editor_id for r in actual if r.record_context
+            ] == [
+                "WarriorClass",
+                None,
             ]
 
     def test_valid_prefix_before_error(self) -> None:

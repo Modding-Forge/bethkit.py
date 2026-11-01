@@ -6,10 +6,11 @@ Copyright (c) Modding Forge
 
 from ..records._base import FieldRef, RecordModel, StructModel
 from ..records._values import FormId, OpenIntEnum
-from ..records._wire import FieldAddress, RecordSnapshot
+from ..records._wire import FieldAddress, RecordContext, RecordSnapshot
 
 __all__ = [
     "FieldAddress",
+    "RecordContext",
     "FieldRef",
     "FormId",
     "OpenIntEnum",

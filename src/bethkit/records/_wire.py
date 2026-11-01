@@ -65,6 +65,15 @@ class ByteSpan(pydantic.BaseModel, frozen=True):
     """First byte after the field."""
 
 
+class RecordContext(pydantic.BaseModel, frozen=True):
+    """Record metadata of a string, copied while its record was decoded."""
+
+    subrecord_signature: tuple[int, int, int, int]
+    """Four-byte signature of the subrecord containing the string."""
+    editor_id: Optional[str]
+    """Editor ID of the containing record, or None if it has none."""
+
+
 class WireScalar(pydantic.BaseModel, frozen=True):
     """Tagged scalar, retaining representation details for native edits."""
 
@@ -104,6 +113,8 @@ class WireScalar(pydantic.BaseModel, frozen=True):
     """Codec selected for schema-localizable inline text."""
     encoding_source: Optional[Literal["schema", "heuristic", "forced"]] = None
     """Whether the codec came from the schema, heuristic, or forced policy."""
+    record_context: Optional[RecordContext] = None
+    """Batched string metadata; absent for snapshots and older libraries."""
 
 
 class WireStruct(pydantic.BaseModel, frozen=True):
