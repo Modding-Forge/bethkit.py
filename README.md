@@ -18,6 +18,8 @@ The preservation option `SemanticContext.for_plugin(package, plugin, preserve_un
 
 Separately, `plugin.iter_strings(context, preserve_opaque_nontext=True, on_diagnostic=observer)` attempts full record validation but retains failed schema-proven nontext records as untouched opaque source, emitting typed diagnostics and warnings. Text-bearing failures and unknown schemas remain strict. The default remains strict, and this option cannot be combined with `validate_nontext=False`. An unchanged `PluginPatcher` output and unrelated record edits retain opaque source bytes; the option does not repair or permit semantic edits to an undecodable record. Both preservation options require Bethkit 0.9.0 or newer.
 
+References yielded by `plugin.iter_strings(context)` also carry `record_context`: the signature of the containing subrecord and the editor ID of its record, copied while the record was decoded. Consumers that need these values per string can use them instead of looking up the record for every string. The context is `None` for native libraries up to Bethkit 0.10.0, for references built from record snapshots, and for records whose editor ID cannot be decoded; look up the record in that case to get the original error.
+
 Encoding detector and codec copyright/permission notices are bundled under `bethkit/licenses/` in platform wheels. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) identifies the audited components; Bethkit's own license remains Apache-2.0.
 
 - **Plugin reading** - open `.esp`/`.esm`/`.esl` files by path or from in-memory bytes; iterate groups and records; look up records by FormID or EditorID; inspect sub-records

@@ -11,7 +11,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bethkit import Game, Plugin, StringFileKind, _error
+from bethkit import Game, Plugin, RecordContext, StringFileKind, _error
+from bethkit.records import _wire
 from bethkit.schema import SemanticContext
 from bethkit.strings import (
     LocalizationSet,
@@ -129,6 +130,35 @@ class TestStringReferences:
         assert plain.identity == detected.identity
         assert detected.encoding == "utf8"
         assert detected.encoding_source == "heuristic"
+
+    def test_record_context_is_passed_through(
+        self, mock_lib: MagicMock
+    ) -> None:
+        """Keeps native record context on references without changing identity.
+
+        Args:
+            mock_lib: Patched native functions.
+        """
+
+        # given
+        snapshot = _snapshot()
+        value = snapshot.fields[0].value
+        assert isinstance(value, _wire.WireScalar)
+        context = RecordContext(
+            subrecord_signature=(70, 85, 76, 76), editor_id="Id"
+        )
+        with_context = value.model_copy(update={"record_context": context})
+        with Plugin._from_native(0x100) as plugin:
+            # when
+            plain = next(references._from_scalars(iter([value]), plugin, None))
+            enriched = next(
+                references._from_scalars(iter([with_context]), plugin, None)
+            )
+
+        # then
+        assert plain.record_context is None
+        assert enriched.record_context == context
+        assert plain.identity == enriched.identity
 
     def test_external_reference_without_tables_is_unresolved(
         self, mock_lib: MagicMock

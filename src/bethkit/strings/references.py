@@ -147,6 +147,7 @@ def _from_scalars(
                 storage="inline",
                 encoding=value.inline_encoding,
                 encoding_source=value.encoding_source,
+                record_context=value.record_context,
             )
         elif (
             value.kind == "bytes"
@@ -168,6 +169,7 @@ def _from_scalars(
                 best_effort_text=preview.text,
                 best_effort_encoding=preview.encoding,
                 preview_escaped_bytes=preview.escaped_bytes,
+                record_context=value.record_context,
             )
             logging.getLogger("StringScan").warning(
                 f"Undecoded text in {plugin.source_name!r}, "
@@ -203,6 +205,7 @@ def _from_scalars(
                 storage="external",
                 table_kind=kind,
                 string_id=value.value,
+                record_context=value.record_context,
             )
         else:
             raise _error.StringTableError(

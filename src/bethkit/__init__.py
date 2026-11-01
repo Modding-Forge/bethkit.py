@@ -63,7 +63,13 @@ from .plugin import (
     WritableGroup,
     WritableRecord,
 )
-from .records import FieldAddress, FieldRef, RecordModel, RecordSnapshot
+from .records import (
+    FieldAddress,
+    FieldRef,
+    RecordContext,
+    RecordModel,
+    RecordSnapshot,
+)
 from .records._wire import ValidationDiagnostic, ValidationReport
 from .schema import (
     Conflict,
@@ -93,6 +99,7 @@ from .strings import (
 
 __all__ = [
     "FieldAddress",
+    "RecordContext",
     "FieldRef",
     "RecordModel",
     "RecordSnapshot",
