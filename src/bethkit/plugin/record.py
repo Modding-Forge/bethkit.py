@@ -187,8 +187,10 @@ class Record(_ownership.BorrowedHandle):
         if copied != count:
             raise BethkitNativeError("Native subrecord count changed.")
         data = bytes(buffer)
+        # A list comprehension avoids a generator frame per signature; this runs
+        # for every record of a string scan.
         return tuple(
-            data[index : index + 4] for index in range(0, len(data), 4)
+            [data[index : index + 4] for index in range(0, len(data), 4)]
         )
 
     def subrecord_at(self, index: int) -> SubRecord:
